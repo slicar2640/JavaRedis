@@ -57,7 +57,7 @@ public class Main {
           case "SET":
             clientInput.readLine();
             String setKey = clientInput.readLine();
-            String setValue = clientInput.readLine() + "\r\n" + clientInput.readLine();
+            String setValue = clientInput.readLine() + "\r\n" + clientInput.readLine() + "\r\n";
             System.out.println("Set " + setKey + " to " + setValue);
             storedData.put(setKey, setValue);
             outputWriter.write("+OK\r\n");
