@@ -1,6 +1,8 @@
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
@@ -33,32 +35,28 @@ public class Main {
 
   static void handleClient(Socket clientSocket) {
     try (clientSocket; // automatically closes socket at the end
-        OutputStream outputStream = clientSocket.getOutputStream();
-        InputStream inputStream = clientSocket.getInputStream()) {
+        BufferedWriter outputWriter = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
+        BufferedReader clientInput = new BufferedReader(
+            new InputStreamReader(clientSocket.getInputStream()));) {
 
-      while (true) {
-        byte[] input = new byte[1024];
-        inputStream.read(input);
-        System.out.println("Received: " + new String(input).replaceAll("\\", "/").trim());
-        // if (in.readLine() == null) {
-        //   break;
-        // }
-        // System.out.println(in.readLine());
-        // String line = in.readLine();
-        // System.out.println("Last line: " + line);
+      String content;
+      while ((content = clientInput.readLine()) != null) {
 
-        // switch (line.toUpperCase()) {
-        //   case "PING":
-        //     outputStream.write("+PONG\r\n".getBytes());
-        //     System.out.println("Wrote pong");
-        //     break;
-        //   case "ECHO":
-        //     while(true)System.out.println(in.readLine());
-        //     // break;
+        switch (content.toUpperCase()) {
+          case "PING":
+            outputWriter.write("+PONG\r\n");
+            outputWriter.flush();
+            break;
+          case "ECHO":
+            String numBytes = clientInput.readLine();
+            String message = clientInput.readLine();
+            outputWriter.write(numBytes + "\r\n" + message + "\r\n");
+            outputWriter.flush();
+            break;
 
-        //   default:
-        //     break;
-        // }
+          default:
+            break;
+        }
       }
 
     } catch (IOException e) {
