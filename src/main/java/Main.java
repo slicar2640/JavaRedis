@@ -41,7 +41,9 @@ public class Main {
         InputStream inputStream = clientSocket.getInputStream();) {
       String[] line;
       if ((char) inputStream.read() == '*') {
-        line = new String[inputStream.read()];
+        int lengthByte = inputStream.read();
+        System.out.println(lengthByte + " " + (char)lengthByte);
+        line = new String[lengthByte];
         inputStream.read();
         inputStream.read(); // \r\n
       } else {
