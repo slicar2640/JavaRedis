@@ -61,6 +61,7 @@ public class Main {
             System.out.println("Set " + setKey + " to " + setValue);
             storedData.put(setKey, setValue);
             outputWriter.write("+OK\r\n");
+            outputWriter.flush();
             break;
           case "GET":
             clientInput.readLine();
@@ -71,6 +72,7 @@ public class Main {
             } else {
               outputWriter.write(getValue);
             }
+            outputWriter.flush();
             break;
 
           default:
