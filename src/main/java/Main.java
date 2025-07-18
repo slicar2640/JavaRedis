@@ -40,7 +40,11 @@ public class Main {
         BufferedWriter outputWriter = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
         InputStream inputStream = clientSocket.getInputStream();) {
 
-      while(true) System.out.println((char)inputStream.read());
+      while(true) {
+        byte[] readTo = new byte[1];
+        inputStream.read(readTo);
+        System.out.println(new String(readTo));
+      }
       // while ((content = clientInput.readLine()) != null) {
 
       //   switch (content.toUpperCase()) {
