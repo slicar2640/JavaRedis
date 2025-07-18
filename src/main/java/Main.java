@@ -57,6 +57,7 @@ public class Main {
           byte[] stringBytes = new byte[length];
           inputStream.read(stringBytes, 0, length);
           line[i] = new String(stringBytes);
+          System.out.println(line[i]);
           inputStream.read();
           inputStream.read(); // \r\n
         } else {
