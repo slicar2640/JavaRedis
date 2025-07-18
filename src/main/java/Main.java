@@ -53,8 +53,7 @@ public class Main {
         char thisChar = (char) inputStream.read();
         System.out.println(thisChar);
         if (thisChar == '$') {
-          System.out.println("yay");
-          int length = inputStream.read();
+          int length = inputStream.read() - '0';
           byte[] stringBytes = new byte[length];
           inputStream.read(stringBytes, 0, length);
           line[i] = new String(stringBytes);
