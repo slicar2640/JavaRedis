@@ -42,7 +42,7 @@ public class Main {
       String[] line;
       if ((char) inputStream.read() == '*') {
         int lengthByte = inputStream.read();
-        System.out.println((int)(char)lengthByte);
+        System.out.println(lengthByte - '0');
         line = new String[lengthByte];
         inputStream.read();
         inputStream.read(); // \r\n
