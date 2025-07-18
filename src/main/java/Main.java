@@ -48,12 +48,13 @@ public class Main {
       } else {
         throw new Exception("Doesn't start with *");
       }
-      System.out.println("length: " + line.length);
+      
       for (int i = 0; i < line.length; i++) {
         char thisChar = (char) inputStream.read();
         System.out.println("thisChar: " + thisChar);
         if (thisChar == '$') {
           int length = inputStream.read() - '0';
+          System.out.println("string length: " + length);
           byte[] stringBytes = new byte[length];
           inputStream.read();
           inputStream.read(); // \r\n
