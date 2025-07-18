@@ -41,9 +41,9 @@ public class Main {
         InputStream inputStream = clientSocket.getInputStream();) {
 
       while(true) {
-        byte[] readTo = new byte[1];
+        byte[] readTo = new byte[2];
         inputStream.read(readTo);
-        System.out.println(new String(readTo));
+        System.out.println(new String(readTo, 0, 2));
       }
       // while ((content = clientInput.readLine()) != null) {
 
