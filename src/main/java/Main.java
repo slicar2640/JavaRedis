@@ -1,6 +1,7 @@
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
@@ -37,11 +38,9 @@ public class Main {
   static void handleClient(Socket clientSocket) {
     try (clientSocket; // automatically closes socket at the end
         BufferedWriter outputWriter = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
-        BufferedReader clientInput = new BufferedReader(
-            new InputStreamReader(clientSocket.getInputStream()));) {
+        InputStream inputStream = clientSocket.getInputStream();) {
 
-      String content;
-      while(true) System.out.println(clientInput.readLine());
+      while(true) System.out.println(inputStream.read());
       // while ((content = clientInput.readLine()) != null) {
 
       //   switch (content.toUpperCase()) {
