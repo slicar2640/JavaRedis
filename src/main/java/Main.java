@@ -51,7 +51,7 @@ public class Main {
       System.out.println("length: " + line.length);
       for (int i = 0; i < line.length; i++) {
         char thisChar = (char) inputStream.read();
-        System.out.println(thisChar);
+        System.out.println("thisChar: " + thisChar);
         if (thisChar == '$') {
           int length = inputStream.read() - '0';
           byte[] stringBytes = new byte[length];
