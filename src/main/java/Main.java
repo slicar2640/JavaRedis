@@ -34,29 +34,31 @@ public class Main {
   static void handleClient(Socket clientSocket) {
     try (clientSocket; // automatically closes socket at the end
         OutputStream outputStream = clientSocket.getOutputStream();
-        BufferedReader in = new BufferedReader(
-            new InputStreamReader(clientSocket.getInputStream()))) {
+        InputStream inputStream = clientSocket.getInputStream()) {
 
       while (true) {
-        if (in.readLine() == null) {
-          break;
-        }
-        System.out.println(in.readLine());
-        String line = in.readLine();
-        System.out.println("Last line: " + line);
+        byte[] input = new byte[1024];
+        inputStream.read(input);
+        System.out.println("Received: " + new String(input).trim());
+        // if (in.readLine() == null) {
+        //   break;
+        // }
+        // System.out.println(in.readLine());
+        // String line = in.readLine();
+        // System.out.println("Last line: " + line);
 
-        switch (line.toUpperCase()) {
-          case "PING":
-            outputStream.write("+PONG\r\n".getBytes());
-            System.out.println("Wrote pong");
-            break;
-          case "ECHO":
-            while(true)System.out.println(in.readLine());
-            // break;
+        // switch (line.toUpperCase()) {
+        //   case "PING":
+        //     outputStream.write("+PONG\r\n".getBytes());
+        //     System.out.println("Wrote pong");
+        //     break;
+        //   case "ECHO":
+        //     while(true)System.out.println(in.readLine());
+        //     // break;
 
-          default:
-            break;
-        }
+        //   default:
+        //     break;
+        // }
       }
 
     } catch (IOException e) {
