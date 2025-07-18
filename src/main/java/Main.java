@@ -1,15 +1,13 @@
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
-import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
 
 public class Main {
-  private static HashMap<String, String> storedData = new HashMap<>();
+  private static HashMap<String, StoredValue> storedData = new HashMap<>();
 
   public static void main(String[] args) {
     // You can use print statements as follows for debugging, they'll be visible
@@ -51,7 +49,6 @@ public class Main {
 
       for (int i = 0; i < line.length; i++) {
         char thisChar = (char) inputStream.read();
-        System.out.println("thisChar: " + thisChar);
         if (thisChar == '$') {
           int length = inputStream.read() - '0';
           byte[] stringBytes = new byte[length];
@@ -62,6 +59,7 @@ public class Main {
           inputStream.read();
           inputStream.read(); // \r\n
         } else {
+          System.out.println("thisChar: " + thisChar);
           throw new Exception("Not bulk string, probably should deal with this");
         }
       }
@@ -73,13 +71,43 @@ public class Main {
           break;
         case "ECHO":
           String toEcho = line[1];
-          System.out.println(toEcho);
+          outputWriter.write("$" + toEcho.length() + "\r\n" + toEcho + "\r\n");
+          outputWriter.flush();
           break;
         case "SET":
-
+          String setKey = line[1];
+          String setValue = line[2];
+          StoredValue stored = null;
+          if (line.length == 3) {
+            stored = new StoredValue(setValue);
+          } else {
+            if (line[3].toUpperCase().equals("PX")) {
+              long expiry = Long.valueOf(line[4]);
+              stored = new StoredValue(setValue, expiry);
+            }
+          }
+          if (stored != null) {
+            storedData.put(setKey, stored);
+          }
           break;
         case "GET":
-
+          String getKey = line[1];
+          StoredValue getStored = storedData.get(getKey);
+          if (getStored == null) {
+            outputWriter.write("$-1\\r\\n");
+            outputWriter.flush();
+            break;
+          }
+          String getValue = getStored.getValue();
+          if (getValue != null) {
+            outputWriter.write("$" + getValue.length() + "\r\n" + getValue + "\r\n");
+            outputWriter.flush();
+          } else {
+            outputWriter.write("$-1\\r\\n");
+            outputWriter.flush();
+            storedData.remove(getKey);
+            break;
+          }
           break;
 
         default:
