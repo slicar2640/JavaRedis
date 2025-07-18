@@ -39,53 +39,70 @@ public class Main {
     try (clientSocket; // automatically closes socket at the end
         BufferedWriter outputWriter = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
         InputStream inputStream = clientSocket.getInputStream();) {
-
-      while(true) {
-        byte[] readTo = new byte[2];
-        inputStream.read(readTo);
-        System.out.println(new String(readTo, 0, 2));
+      String[] line;
+      if ((char) inputStream.read() == '*') {
+        line = new String[inputStream.read()];
+        inputStream.read();
+        inputStream.read(); // \r\n
+      } else {
+        throw new Exception("Doesn't start with *");
       }
+
+      for (int i = 0; i < line.length; i++) {
+        if((char) inputStream.read() == '$') {
+          int length = inputStream.read();
+          byte[] stringBytes = new byte[length];
+          inputStream.read(stringBytes, 0,  length);
+          line[i] = new String(stringBytes);
+        } else {
+          throw new Exception("Not bulk string, probably should deal with this");
+        }
+      }
+      for(String s : line) System.out.println(s);
       // while ((content = clientInput.readLine()) != null) {
 
-      //   switch (content.toUpperCase()) {
-      //     case "PING":
-      //       outputWriter.write("+PONG\r\n");
-      //       outputWriter.flush();
-      //       break;
-      //     case "ECHO":
-      //       String numBytes = clientInput.readLine();
-      //       String message = clientInput.readLine();
-      //       outputWriter.write(numBytes + "\r\n" + message + "\r\n");
-      //       outputWriter.flush();
-      //       break;
-      //     case "SET":
-      //       clientInput.readLine();
-      //       String setKey = clientInput.readLine();
-      //       String setValue = clientInput.readLine() + "\r\n" + clientInput.readLine() + "\r\n";
-      //       System.out.println("Set " + setKey + " to " + setValue);
-      //       storedData.put(setKey, setValue);
-      //       outputWriter.write("+OK\r\n");
-      //       outputWriter.flush();
-      //       break;
-      //     case "GET":
-      //       clientInput.readLine();
-      //       String getKey = clientInput.readLine();
-      //       String getValue = storedData.get(getKey);
-      //       if(getValue == null) {
-      //         outputWriter.write("$-1\\r\\n");
-      //       } else {
-      //         outputWriter.write(getValue);
-      //       }
-      //       outputWriter.flush();
-      //       break;
+      // switch (content.toUpperCase()) {
+      // case "PING":
+      // outputWriter.write("+PONG\r\n");
+      // outputWriter.flush();
+      // break;
+      // case "ECHO":
+      // String numBytes = clientInput.readLine();
+      // String message = clientInput.readLine();
+      // outputWriter.write(numBytes + "\r\n" + message + "\r\n");
+      // outputWriter.flush();
+      // break;
+      // case "SET":
+      // clientInput.readLine();
+      // String setKey = clientInput.readLine();
+      // String setValue = clientInput.readLine() + "\r\n" + clientInput.readLine() +
+      // "\r\n";
+      // System.out.println("Set " + setKey + " to " + setValue);
+      // storedData.put(setKey, setValue);
+      // outputWriter.write("+OK\r\n");
+      // outputWriter.flush();
+      // break;
+      // case "GET":
+      // clientInput.readLine();
+      // String getKey = clientInput.readLine();
+      // String getValue = storedData.get(getKey);
+      // if(getValue == null) {
+      // outputWriter.write("$-1\\r\\n");
+      // } else {
+      // outputWriter.write(getValue);
+      // }
+      // outputWriter.flush();
+      // break;
 
-      //     default:
-      //       break;
-      //   }
+      // default:
+      // break;
+      // }
       // }
 
     } catch (IOException e) {
       System.out.println("IOException: " + e.getMessage());
+    } catch (Exception e) {
+      System.out.println("Exception: " + e.getMessage());
     }
   }
 }
