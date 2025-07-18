@@ -50,7 +50,8 @@ public class Main {
       }
       System.out.println("length: " + line.length);
       for (int i = 0; i < line.length; i++) {
-        if ((char) inputStream.read() == '$') {
+        char thisChar = (char) inputStream.read();
+        if (thisChar == '$') {
           int length = inputStream.read();
           byte[] stringBytes = new byte[length];
           inputStream.read(stringBytes, 0, length);
@@ -58,7 +59,6 @@ public class Main {
           inputStream.read();
           inputStream.read(); // \r\n
         } else {
-          System.out.println("hey");
           throw new Exception("Not bulk string, probably should deal with this");
         }
       }
