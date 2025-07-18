@@ -58,6 +58,7 @@ public class Main {
             clientInput.readLine();
             String setKey = clientInput.readLine();
             String setValue = clientInput.readLine() + "\r\n" + clientInput.readLine();
+            System.out.println("Set " + setKey + " to " + setValue);
             storedData.put(setKey, setValue);
             outputWriter.write("+OK\r\n");
             break;
