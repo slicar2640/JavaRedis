@@ -39,7 +39,7 @@ public class Main {
       while (true) {
         byte[] input = new byte[1024];
         inputStream.read(input);
-        System.out.println("Received: " + new String(input).replaceAll("\\", "\\\\").trim());
+        System.out.println("Received: " + new String(input).replaceAll("\\", "/").trim());
         // if (in.readLine() == null) {
         //   break;
         // }
