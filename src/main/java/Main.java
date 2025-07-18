@@ -48,27 +48,43 @@ public class Main {
       } else {
         throw new Exception("Doesn't start with *");
       }
-      
+
       for (int i = 0; i < line.length; i++) {
         char thisChar = (char) inputStream.read();
         System.out.println("thisChar: " + thisChar);
         if (thisChar == '$') {
           int length = inputStream.read() - '0';
-          System.out.println("string length: " + length);
           byte[] stringBytes = new byte[length];
           inputStream.read();
           inputStream.read(); // \r\n
           inputStream.read(stringBytes, 0, length);
           line[i] = new String(stringBytes);
-          System.out.println(line[i]);
           inputStream.read();
           inputStream.read(); // \r\n
         } else {
           throw new Exception("Not bulk string, probably should deal with this");
         }
       }
-      for (String s : line)
-        System.out.println(s);
+      String command = line[0];
+      switch (command.toUpperCase()) {
+        case "PING":
+          outputWriter.write("+PONG\r\n");
+          outputWriter.flush();
+          break;
+        case "ECHO":
+          String toEcho = line[1];
+          System.out.println(toEcho);
+          break;
+        case "SET":
+
+          break;
+        case "GET":
+
+          break;
+
+        default:
+          break;
+      }
       // while ((content = clientInput.readLine()) != null) {
 
       // switch (content.toUpperCase()) {
