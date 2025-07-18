@@ -89,7 +89,7 @@ public class Main {
           if (stored != null) {
             storedData.put(setKey, stored);
           }
-          outputWriter.write("+OKr\\n");
+          outputWriter.write("+OK\\r\\n");
             outputWriter.flush();
           break;
         case "GET":
