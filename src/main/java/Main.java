@@ -8,7 +8,8 @@ import java.net.Socket;
 import java.util.HashMap;
 
 public class Main {
-  private HashMap<String, String> storedData = new HashMap<>();
+  private static HashMap<String, String> storedData = new HashMap<>();
+
   public static void main(String[] args) {
     // You can use print statements as follows for debugging, they'll be visible
     // when running tests.
@@ -54,8 +55,22 @@ public class Main {
             outputWriter.flush();
             break;
           case "SET":
-            while(true)System.out.println(clientInput.readLine());
-            // break;
+            clientInput.readLine();
+            String setKey = clientInput.readLine();
+            String setValue = clientInput.readLine() + "\r\n" + clientInput.readLine();
+            storedData.put(setKey, setValue);
+            outputWriter.write("+OK\r\n");
+            break;
+          case "GET":
+            clientInput.readLine();
+            String getKey = clientInput.readLine();
+            String getValue = storedData.get(getKey);
+            if(getValue == null) {
+              outputWriter.write("$-1\\r\\n");
+            } else {
+              outputWriter.write(getValue);
+            }
+            break;
 
           default:
             break;
