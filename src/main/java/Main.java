@@ -58,6 +58,7 @@ public class Main {
           inputStream.read();
           inputStream.read(); // \r\n
         } else {
+          System.out.println("hey");
           throw new Exception("Not bulk string, probably should deal with this");
         }
       }
