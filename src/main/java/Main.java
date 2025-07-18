@@ -45,8 +45,18 @@ public class Main {
         String line = in.readLine();
         System.out.println("Last line: " + line);
 
-        outputStream.write("+PONG\r\n".getBytes());
-        System.out.println("Wrote pong");
+        switch (line.toUpperCase()) {
+          case "PING":
+            outputStream.write("+PONG\r\n".getBytes());
+            System.out.println("Wrote pong");
+            break;
+          case "ECHO":
+            System.out.println("what next?");
+            break;
+
+          default:
+            break;
+        }
       }
 
     } catch (IOException e) {
