@@ -41,7 +41,7 @@ public class Main {
         if (in.readLine() == null) {
           break;
         }
-        in.readLine();
+        System.out.println(in.readLine());
         String line = in.readLine();
         System.out.println("Last line: " + line);
 
