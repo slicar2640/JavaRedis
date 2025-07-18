@@ -51,7 +51,7 @@ public class Main {
             System.out.println("Wrote pong");
             break;
           case "ECHO":
-            System.out.println("what next?");
+            System.out.println(in.readLine());
             break;
 
           default:
