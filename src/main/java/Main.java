@@ -51,8 +51,8 @@ public class Main {
             System.out.println("Wrote pong");
             break;
           case "ECHO":
-            System.out.println(in.readLine());
-            break;
+            while(true)System.out.println(in.readLine());
+            // break;
 
           default:
             break;
