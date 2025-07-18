@@ -5,8 +5,10 @@ import java.io.OutputStreamWriter;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.HashMap;
 
 public class Main {
+  private HashMap<String, String> storedData = new HashMap<>();
   public static void main(String[] args) {
     // You can use print statements as follows for debugging, they'll be visible
     // when running tests.
@@ -51,6 +53,9 @@ public class Main {
             outputWriter.write(numBytes + "\r\n" + message + "\r\n");
             outputWriter.flush();
             break;
+          case "SET":
+            while(true)System.out.println(clientInput.readLine());
+            // break;
 
           default:
             break;
