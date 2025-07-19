@@ -121,38 +121,42 @@ public class StoredStream extends StoredValue {
 
   public ArrayList<StreamEntry> getRange(String start, String end) {
     int startIndex = 0;
-    if (idRegex1.matcher(start).matches()) { // String id
-      while (startIndex < entries.size()) {
-        if (entries.get(startIndex).id.equals(start)) {
-          break;
+    if (!start.equals("-")) {
+      if (idRegex1.matcher(start).matches()) { // String id
+        while (startIndex < entries.size()) {
+          if (entries.get(startIndex).id.equals(start)) {
+            break;
+          }
+          startIndex++;
         }
-        startIndex++;
-      }
-    } else { // Millis
-      long startTime = Long.valueOf(start);
-      while (startIndex < entries.size()) {
-        if (entries.get(startIndex).timeMillis == startTime) {
-          break;
+      } else { // Millis
+        long startTime = Long.valueOf(start);
+        while (startIndex < entries.size()) {
+          if (entries.get(startIndex).timeMillis == startTime) {
+            break;
+          }
+          startIndex++;
         }
-        startIndex++;
       }
     }
 
     int endIndex = entries.size() - 1;
-    if (idRegex1.matcher(end).matches()) { // String id
-      while (endIndex >= 0) {
-        if (entries.get(endIndex).id.equals(end)) {
-          break;
+    if (!end.equals("+")) {
+      if (idRegex1.matcher(end).matches()) { // String id
+        while (endIndex >= 0) {
+          if (entries.get(endIndex).id.equals(end)) {
+            break;
+          }
+          endIndex--;
         }
-        endIndex--;
-      }
-    } else { // Millis
-      long endTime = Long.valueOf(end);
-      while (endIndex >= 0) {
-        if (entries.get(endIndex).timeMillis == endTime) {
-          break;
+      } else { // Millis
+        long endTime = Long.valueOf(end);
+        while (endIndex >= 0) {
+          if (entries.get(endIndex).timeMillis == endTime) {
+            break;
+          }
+          endIndex--;
         }
-        endIndex--;
       }
     }
 
