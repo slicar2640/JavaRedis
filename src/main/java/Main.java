@@ -139,10 +139,10 @@ public class Main {
               for (int i = 3; i < line.length; i += 2) {
                 addedEntries.put(line[i], line[i + 1]);
               }
-              stream.addEntries(id, addedEntries);
-              outputWriter.write(bulkString(id));
+              String returnId = stream.addEntries(id, addedEntries);
+              outputWriter.write(bulkString(returnId));
               outputWriter.flush();
-            } catch (Exception e) {
+            } catch (RedisException e) {
               outputWriter.write(simpleError(e.getMessage()));
               outputWriter.flush();
             }
