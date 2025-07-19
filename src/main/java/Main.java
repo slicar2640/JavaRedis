@@ -64,7 +64,7 @@ public class Main {
             while ((digit = inputStream.read()) != '\r') {
               length = length * 10 + (digit - '0');
             }
-            
+
             inputStream.read(); // \n
             byte[] stringBytes = new byte[length];
             inputStream.read(stringBytes, 0, length);
@@ -92,11 +92,11 @@ public class Main {
             String setKey = line[1];
             String setValue = line[2];
             if (line.length == 3) {
-              storedData.put(setKey, new StoredString(setValue)); //Hardcoding string
+              storedData.put(setKey, new StoredString(setValue)); // Hardcoding string
             } else {
               if (line[3].equalsIgnoreCase("PX")) {
                 long expiry = Long.valueOf(line[4]);
-                storeWithExpiry(setKey, new StoredString(setValue), expiry); //Hardcoding string
+                storeWithExpiry(setKey, new StoredString(setValue), expiry); // Hardcoding string
               }
             }
             outputWriter.write("+OK\r\n");
@@ -123,26 +123,30 @@ public class Main {
               outputWriter.write(simpleString(typeValue.type));
               outputWriter.flush();
             }
-          break;
+            break;
           case "XADD":
             String streamKey = line[1];
             StoredStream stream;
-            if(storedData.containsKey(streamKey)) {
-              stream = (StoredStream)storedData.get(streamKey);
+            if (storedData.containsKey(streamKey)) {
+              stream = (StoredStream) storedData.get(streamKey);
             } else {
               stream = new StoredStream();
               storedData.put(streamKey, stream);
             }
-            String id = line[2];
-            HashMap<String, String> addedEntries = new HashMap<>();
-            for(int i = 3; i < line.length; i += 2) {
-              addedEntries.put(line[i], line[i + 1]);
+            try {
+              String id = line[2];
+              HashMap<String, String> addedEntries = new HashMap<>();
+              for (int i = 3; i < line.length; i += 2) {
+                addedEntries.put(line[i], line[i + 1]);
+              }
+              stream.addEntries(id, addedEntries);
+              outputWriter.write(bulkString(id));
+              outputWriter.flush();
+            } catch (Exception e) {
+              outputWriter.write(simpleError(e.getMessage()));
+              outputWriter.flush();
             }
-            stream.addEntries(id, addedEntries);
-            outputWriter.write(bulkString(id));
-            outputWriter.flush();
-          break;
-
+            break;
           default:
             break;
         }
@@ -174,5 +178,9 @@ public class Main {
 
   static String bulkString(String input) {
     return "$" + input.length() + "\r\n" + input + "\r\n";
+  }
+
+  static String simpleError(String input) {
+    return "-" + input + "\r\n";
   }
 }
