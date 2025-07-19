@@ -123,18 +123,12 @@ public class StoredStream extends StoredValue {
     int startIndex = 0;
     if (!start.equals("-")) {
       if (idRegex1.matcher(start).matches()) { // String id
-        while (startIndex < entries.size()) {
-          if (entries.get(startIndex).id.equals(start)) {
-            break;
-          }
+        while (startIndex < entries.size() && !entries.get(startIndex).id.equals(start)) {
           startIndex++;
         }
       } else { // Millis
         long startTime = Long.valueOf(start);
-        while (startIndex < entries.size()) {
-          if (entries.get(startIndex).timeMillis == startTime) {
-            break;
-          }
+        while (startIndex < entries.size() && !(entries.get(startIndex).timeMillis == startTime)) {
           startIndex++;
         }
       }
@@ -143,18 +137,12 @@ public class StoredStream extends StoredValue {
     int endIndex = entries.size() - 1;
     if (!end.equals("+")) {
       if (idRegex1.matcher(end).matches()) { // String id
-        while (endIndex >= 0) {
-          if (entries.get(endIndex).id.equals(end)) {
-            break;
-          }
+        while (endIndex >= 0 && !entries.get(endIndex).id.equals(end)) {
           endIndex--;
         }
       } else { // Millis
         long endTime = Long.valueOf(end);
-        while (endIndex >= 0) {
-          if (entries.get(endIndex).timeMillis == endTime) {
-            break;
-          }
+        while (endIndex >= 0 && !(entries.get(endIndex).timeMillis == endTime)) {
           endIndex--;
         }
       }

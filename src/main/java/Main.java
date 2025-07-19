@@ -77,59 +77,64 @@ public class Main {
 
         String command = line[0];
         switch (command.toUpperCase()) {
-          case "PING":
+          case "PING": {
             outputWriter.write("+PONG\r\n");
             outputWriter.flush();
             break;
-          case "ECHO":
+          }
+          case "ECHO": {
             String toEcho = line[1];
             outputWriter.write("$" + toEcho.length() + "\r\n" + toEcho + "\r\n");
             outputWriter.flush();
             break;
-          case "SET":
-            String setKey = line[1];
-            String setValue = line[2];
+          }
+          case "SET": {
+            String key = line[1];
+            String value = line[2];
             if (line.length == 3) {
-              storedData.put(setKey, new StoredString(setValue)); // Hardcoding string
+              storedData.put(key, new StoredString(value)); // Hardcoding string
             } else {
               if (line[3].equalsIgnoreCase("PX")) {
                 long expiry = Long.valueOf(line[4]);
-                storeWithExpiry(setKey, new StoredString(setValue), expiry); // Hardcoding string
+                storeWithExpiry(key, new StoredString(value), expiry); // Hardcoding string
               }
             }
             outputWriter.write("+OK\r\n");
             outputWriter.flush();
             break;
-          case "GET":
-            String getKey = line[1];
-            StoredValue getValue = storedData.get(getKey);
-            if (getValue == null) {
+          }
+          case "GET": {
+            String key = line[1];
+            StoredValue value = storedData.get(key);
+            if (value == null) {
               outputWriter.write("$-1\r\n");
               outputWriter.flush();
             } else {
-              outputWriter.write(getValue.getOutput());
+              outputWriter.write(value.getOutput());
               outputWriter.flush();
             }
             break;
-          case "TYPE":
-            String typeKey = line[1];
-            StoredValue typeValue = storedData.get(typeKey);
-            if (typeValue == null) {
+          }
+          case "TYPE": {
+            String key = line[1];
+            StoredValue value = storedData.get(key);
+            if (value == null) {
               outputWriter.write("+none\r\n");
               outputWriter.flush();
             } else {
-              outputWriter.write(simpleString(typeValue.type));
+              outputWriter.write(simpleString(value.type));
               outputWriter.flush();
             }
             break;
-          case "XADD":
-            String streamKey = line[1];
+          }
+          case "XADD": {
+            String key = line[1];
             StoredStream stream;
-            if (storedData.containsKey(streamKey)) {
-              stream = (StoredStream) storedData.get(streamKey);
+            if (storedData.containsKey(key)) {
+              stream = (StoredStream) storedData.get(key);
             } else {
               stream = new StoredStream();
-              storedData.put(streamKey, stream);
+              storedData.put(key, stream);
             }
             try {
               String id = line[2];
@@ -145,23 +150,56 @@ public class Main {
               outputWriter.flush();
             }
             break;
-          case "XRANGE":
-            String rangeKey = line[1];
-            StoredStream rangeStream = (StoredStream) storedData.get(rangeKey);
-            ArrayList<StreamEntry> range = rangeStream.getRange(line[2], line[3]);
+          }
+          case "XRANGE": {
+            String key = line[1];
+            StoredStream stream = (StoredStream) storedData.get(key);
+            ArrayList<StreamEntry> range = stream.getRange(line[2], line[3]);
             String returnString = "*" + range.size() + "\r\n";
             for (StreamEntry entry : range) {
               returnString += "*2\r\n";
               returnString += bulkString(entry.id);
               returnString += "*" + (entry.values.size() * 2) + "\r\n";
-              for (String key : entry.values.keySet()) {
-                returnString += bulkString(key);
-                returnString += bulkString(entry.values.get(key));
+              for (String entryKey : entry.values.keySet()) {
+                returnString += bulkString(entryKey);
+                returnString += bulkString(entry.values.get(entryKey));
               }
             }
             outputWriter.write(returnString);
             outputWriter.flush();
             break;
+          }
+          case "XREAD": {
+            int streamsIndex = 0;
+            while (streamsIndex < line.length && !line[streamsIndex].equalsIgnoreCase("STREAMS")) {
+              streamsIndex++;
+            }
+            int numStreams = (line.length - 1 - streamsIndex) / 2;
+            String returnString = "*" + numStreams + "\r\n";
+            for (int i = streamsIndex + 1; i <= streamsIndex + numStreams; i++) {
+              String key = line[i];
+              StoredStream stream = (StoredStream) storedData.get(key);
+              String startId = line[i + numStreams];
+              returnString += "*2\r\n" + bulkString(key);
+              ArrayList<StreamEntry> range = stream.getRange(startId.equals("0-0") ? "-" : startId, "+");
+              returnString += "*" + (range.size() - (startId.equals("0-0") ? 0 : 1)) + "\r\n";
+              for (int j = startId.equals("0-0") ? 0 : 1; j < range.size(); j++) {
+                System.out.println(j);
+                StreamEntry entry = range.get(j);
+                returnString += "*2\r\n";
+                returnString += bulkString(entry.id);
+                returnString += "*" + (entry.values.size() * 2) + "\r\n";
+                for (String entryKey : entry.values.keySet()) {
+                  returnString += bulkString(entryKey);
+                  returnString += bulkString(entry.values.get(entryKey));
+                }
+                System.out.println(returnString);
+              }
+            }
+            outputWriter.write(returnString);
+            outputWriter.flush();
+            break;
+          }
           default:
             break;
         }
