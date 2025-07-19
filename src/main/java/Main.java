@@ -4,10 +4,13 @@ import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class Main {
-  private static HashMap<String, StoredValue> storedData = new HashMap<>();
+  private static HashMap<String, String> storedData = new HashMap<>();
 
   public static void main(String[] args) {
     // You can use print statements as follows for debugging, they'll be visible
@@ -24,7 +27,6 @@ public class Main {
 
       while (true) {
         Socket clientSocket = serverSocket.accept();
-        System.out.println("New client connected");
         new Thread(() -> handleClient(clientSocket)).start();
       }
 
@@ -37,6 +39,7 @@ public class Main {
     try (clientSocket; // automatically closes socket at the end
         BufferedWriter outputWriter = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
         InputStream inputStream = clientSocket.getInputStream();) {
+      System.out.println("New client connected");
       String[] line;
       if ((char) inputStream.read() == '*') {
         int lengthByte = inputStream.read() - '0';
@@ -49,20 +52,25 @@ public class Main {
 
       for (int i = 0; i < line.length; i++) {
         char thisChar = (char) inputStream.read();
-        System.out.println("thisChar: " + thisChar);
         if (thisChar == '$') {
-          int length = inputStream.read() - '0';
+          int length = 0;
+          int digit = 0;
+          while ((digit = inputStream.read()) != '\r') {
+            length = length * 10 + (digit - '0');
+          }
+          System.out.println(length);
+          inputStream.read(); // \n
           byte[] stringBytes = new byte[length];
-          inputStream.read();
-          inputStream.read(); // \r\n
           inputStream.read(stringBytes, 0, length);
           line[i] = new String(stringBytes);
           inputStream.read();
           inputStream.read(); // \r\n
         } else {
+          System.out.println("thisChar: " + thisChar);
           throw new Exception("Not bulk string, probably should deal with this");
         }
       }
+
       String command = line[0];
       switch (command.toUpperCase()) {
         case "PING":
@@ -77,38 +85,31 @@ public class Main {
         case "SET":
           String setKey = line[1];
           String setValue = line[2];
-          StoredValue stored = null;
           if (line.length == 3) {
-            stored = new StoredValue(setValue);
+            storedData.put(setKey, setValue);
           } else {
             if (line[3].toUpperCase().equals("PX")) {
               long expiry = Long.valueOf(line[4]);
-              stored = new StoredValue(setValue, expiry);
+              storeWithExpiry(setKey, setValue, expiry);
             }
-          }
-          if (stored != null) {
-            storedData.put(setKey, stored);
           }
           outputWriter.write("+OK\r\n");
           outputWriter.flush();
           break;
         case "GET":
+          System.out.println("GET");
           String getKey = line[1];
-          StoredValue getStored = storedData.get(getKey);
-          if (getStored == null) {
+          System.out.println("key: " + getKey);
+          String getValue = storedData.get(getKey);
+          if (getValue == null) {
             outputWriter.write("$-1\r\n");
             outputWriter.flush();
-            break;
-          }
-          String getValue = getStored.getValue();
-          if (getValue != null) {
-            outputWriter.write("$" + getValue.length() + "\r\n" + getValue + "\r\n");
+            System.out.println("null");
           } else {
-            outputWriter.write("$-1\r\n");
-            storedData.remove(getKey);
-            break;
+            System.out.println("$" + getValue.length() + "\r\n" + getValue + "\r\n");
+            outputWriter.write("$" + getValue.length() + "\r\n" + getValue + "\r\n");
+            outputWriter.flush();
           }
-          outputWriter.flush();
           break;
 
         default:
@@ -120,5 +121,19 @@ public class Main {
     } catch (Exception e) {
       System.out.println("Exception: " + e.getMessage());
     }
+  }
+
+  static void storeWithExpiry(String key, String value, long expiryMillis) {
+    storedData.put(key, value);
+    Timer timer = new Timer();
+    timer.schedule(
+        new TimerTask() {
+          @Override
+          public void run() {
+            storedData.remove(key);
+            timer.cancel();
+          }
+        },
+        expiryMillis);
   }
 }
