@@ -9,7 +9,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 public class Main {
-  private static HashMap<String, String> storedData = new HashMap<>();
+  private static HashMap<String, StoredValue> storedData = new HashMap<>();
 
   public static void main(String[] args) {
     // You can use print statements as follows for debugging, they'll be visible
@@ -55,7 +55,6 @@ public class Main {
         } else {
           throw new Exception("Doesn't start with *");
         }
-        System.out.println("length: " + line.length);
 
         for (int i = 0; i < line.length; i++) {
           char thisChar = (char) inputStream.read();
@@ -65,7 +64,7 @@ public class Main {
             while ((digit = inputStream.read()) != '\r') {
               length = length * 10 + (digit - '0');
             }
-            System.out.println(length);
+            
             inputStream.read(); // \n
             byte[] stringBytes = new byte[length];
             inputStream.read(stringBytes, 0, length);
@@ -79,7 +78,6 @@ public class Main {
         }
 
         String command = line[0];
-        System.out.println(command);
         switch (command.toUpperCase()) {
           case "PING":
             outputWriter.write("+PONG\r\n");
@@ -94,31 +92,38 @@ public class Main {
             String setKey = line[1];
             String setValue = line[2];
             if (line.length == 3) {
-              storedData.put(setKey, setValue);
+              storedData.put(setKey, new StoredString(setValue)); //Hardcoding string
             } else {
               if (line[3].equalsIgnoreCase("PX")) {
                 long expiry = Long.valueOf(line[4]);
-                storeWithExpiry(setKey, setValue, expiry);
+                storeWithExpiry(setKey, new StoredString(setValue), expiry); //Hardcoding string
               }
             }
             outputWriter.write("+OK\r\n");
             outputWriter.flush();
             break;
           case "GET":
-            System.out.println("GET");
             String getKey = line[1];
-            System.out.println("key: " + getKey);
-            String getValue = storedData.get(getKey);
+            StoredValue getValue = storedData.get(getKey);
             if (getValue == null) {
               outputWriter.write("$-1\r\n");
               outputWriter.flush();
-              System.out.println("null");
             } else {
-              System.out.println("$" + getValue.length() + "\r\n" + getValue + "\r\n");
-              outputWriter.write("$" + getValue.length() + "\r\n" + getValue + "\r\n");
+              outputWriter.write(getValue.getOutput());
               outputWriter.flush();
             }
             break;
+          case "TYPE":
+            String typeKey = line[1];
+            StoredValue typeValue = storedData.get(typeKey);
+            if (typeValue == null) {
+              outputWriter.write("+none\r\n");
+              outputWriter.flush();
+            } else {
+              outputWriter.write("+" + typeValue.type + "\r\n");
+              outputWriter.flush();
+            }
+          break;
 
           default:
             break;
@@ -132,7 +137,7 @@ public class Main {
     }
   }
 
-  static void storeWithExpiry(String key, String value, long expiryMillis) {
+  static void storeWithExpiry(String key, StoredValue value, long expiryMillis) {
     storedData.put(key, value);
     Timer timer = new Timer();
     timer.schedule(
