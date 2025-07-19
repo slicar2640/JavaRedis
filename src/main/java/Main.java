@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -146,6 +147,23 @@ public class Main {
               outputWriter.write(simpleError(e.getMessage()));
               outputWriter.flush();
             }
+            break;
+          case "XRANGE":
+            String rangeKey = line[1];
+            StoredStream rangeStream = (StoredStream) storedData.get(rangeKey);
+            ArrayList<StreamEntry> range = rangeStream.getRange(line[2], line[3]);
+            String returnString = "*" + range.size() + "\r\n";
+            for (StreamEntry entry : range) {
+              returnString += "*2\r\n";
+              returnString += bulkString(entry.id);
+              returnString += "*" + (entry.values.size() * 2) + "\r\n";
+              for (String key : entry.values.keySet()) {
+                returnString += bulkString(key);
+                returnString += bulkString(entry.values.get(key));
+              }
+            }
+            outputWriter.write(returnString);
+            outputWriter.flush();
             break;
           default:
             break;

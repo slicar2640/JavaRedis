@@ -3,7 +3,7 @@ import java.util.HashMap;
 import java.util.regex.Pattern;
 
 public class StoredStream extends StoredValue {
-  public ArrayList<HashMap<String, String>> entries = new ArrayList<>();
+  public ArrayList<StreamEntry> entries = new ArrayList<>();
   private static final Pattern idRegex1 = Pattern.compile("\\d+-\\d+");
   private static final Pattern idRegex2 = Pattern.compile("\\d+-\\*");
 
@@ -25,54 +25,43 @@ public class StoredStream extends StoredValue {
     IdFormat format = idFormat(id);
     switch (format) {
       case TIME_SEQ:
-        newEntries.put("id", id);
-        entries.add(newEntries);
+        entries.add(new StreamEntry(id, newEntries));
         return id;
       case TIME_AUTO:
         if (entries.size() > 0) {
-          String topId = entries.get(entries.size() - 1).get("id");
-          String topMillis = topId.substring(0, topId.indexOf('-'));
-          String newMillis = id.substring(0, id.indexOf('-'));
-          if (topMillis.equals(newMillis)) {
-            long topSequence = Long.valueOf(topId.substring(topId.indexOf('-') + 1));
-            String correctId = id.substring(0, id.length() - 1) + (topSequence + 1);
-            newEntries.put("id", correctId);
-            entries.add(newEntries);
+          StreamEntry topElement = entries.get(entries.size() - 1);
+          long newMillis = Long.valueOf(id.substring(0, id.indexOf('-')));
+          if (topElement.timeMillis == newMillis) {
+            String correctId = id.substring(0, id.length() - 1) + (topElement.sequenceNum + 1);
+            entries.add(new StreamEntry(correctId, newEntries));
             return correctId;
           } else {
-            String correctId = id.substring(0, id.length() - 1) + (newMillis.equals("0") ? "1" : "0");
-            newEntries.put("id", correctId);
-            entries.add(newEntries);
+            String correctId = id.substring(0, id.length() - 1) + (newMillis == 0 ? "1" : "0");
+            entries.add(new StreamEntry(correctId, newEntries));
             return correctId;
           }
         } else {
-          String millis = id.substring(0, id.length() - 1);
-          String correctId = millis + (millis.equals("0-") ? 1 : 0);
-          newEntries.put("id", correctId);
-          entries.add(newEntries);
+          String withoutAsterisk = id.substring(0, id.length() - 1);
+          String correctId = withoutAsterisk + (withoutAsterisk.equals("0-") ? 1 : 0);
+          entries.add(new StreamEntry(correctId, newEntries));
           return correctId;
         }
       case AUTO:
-        String millis = Long.toString(System.currentTimeMillis());
+        long millis = System.currentTimeMillis();
         if (entries.size() > 0) {
-          String topId = entries.get(entries.size() - 1).get("id");
-          String topMillis = topId.substring(0, topId.indexOf('-'));
-          if (millis.equals(topMillis)) {
-            long topSequence = Long.valueOf(topId.substring(topId.indexOf('-') + 1));
-            String correctId = id.substring(0, id.length() - 1) + (topSequence + 1);
-            newEntries.put("id", correctId);
-            entries.add(newEntries);
+          StreamEntry topElement = entries.get(entries.size() - 1);
+          if (millis == topElement.timeMillis) {
+            String correctId = id.substring(0, id.length() - 1) + (topElement.sequenceNum + 1);
+            entries.add(new StreamEntry(correctId, newEntries));
             return correctId;
           } else {
-            String correctId = millis + (millis.equals("0-") ? 1 : 0);
-            newEntries.put("id", correctId);
-            entries.add(newEntries);
+            String correctId = millis + (millis == 0 ? "1" : "0");
+            entries.add(new StreamEntry(correctId, newEntries));
             return correctId;
           }
         } else {
-          String correctId = millis + "-" + (millis.equals("0") ? 1 : 0);
-          newEntries.put("id", correctId);
-          entries.add(newEntries);
+          String correctId = millis + "-" + (millis == 0 ? "1" : "0");
+          entries.add(new StreamEntry(correctId, newEntries));
           return correctId;
         }
       case INVALID:
@@ -81,15 +70,26 @@ public class StoredStream extends StoredValue {
     return null;
   }
 
-  public String getOutput() {
-    return "IDK";
-  }
-
   IdFormat idFormat(String id) {
     if (id.equals("*")) {
       return IdFormat.AUTO;
     } else if (idRegex1.matcher(id).matches()) {
-      if (entries.size() == 0) {
+      if (entries.size() > 0) {
+        StreamEntry topElement = entries.get(entries.size() - 1);
+        long newMillis = Long.valueOf(id.substring(0, id.indexOf('-')));
+        if (newMillis < topElement.timeMillis) {
+          return IdFormat.INVALID;
+        } else if (newMillis == topElement.timeMillis) {
+          long newSequence = Long.valueOf(id.substring(id.indexOf('-') + 1));
+          if (newSequence > topElement.sequenceNum) {
+            return IdFormat.TIME_SEQ;
+          } else {
+            return IdFormat.INVALID;
+          }
+        } else {
+          return IdFormat.TIME_SEQ;
+        }
+      } else {
         long newMillis = Long.valueOf(id.substring(0, id.indexOf('-')));
         if (newMillis > 0) {
           return IdFormat.TIME_SEQ;
@@ -101,35 +101,65 @@ public class StoredStream extends StoredValue {
             return IdFormat.INVALID;
           }
         }
-      } else {
-        String topId = entries.get(entries.size() - 1).get("id");
-        long topMillis = Long.valueOf(topId.substring(0, topId.indexOf('-')));
-        long newMillis = Long.valueOf(id.substring(0, id.indexOf('-')));
-        if (newMillis < topMillis) {
-          return IdFormat.INVALID;
-        } else if (newMillis == topMillis) {
-          long topSequence = Long.valueOf(topId.substring(topId.indexOf('-') + 1));
-          long newSequence = Long.valueOf(id.substring(id.indexOf('-') + 1));
-          if (newSequence > topSequence) {
-            return IdFormat.TIME_SEQ;
-          } else {
-            return IdFormat.INVALID;
-          }
-        } else {
-          return IdFormat.TIME_SEQ;
-        }
       }
     } else if (idRegex2.matcher(id).matches()) {
-      String topId = entries.size() == 0 ? "0-0" : entries.get(entries.size() - 1).get("id");
-      long topMillis = Long.valueOf(topId.substring(0, topId.indexOf('-')));
-      long newMillis = Long.valueOf(id.substring(0, id.indexOf('-')));
-      if (newMillis >= topMillis) {
-        return IdFormat.TIME_AUTO;
+      if (entries.size() > 0) {
+        StreamEntry topElement = entries.get(entries.size() - 1);
+        long newMillis = Long.valueOf(id.substring(0, id.indexOf('-')));
+        if (newMillis >= topElement.timeMillis) {
+          return IdFormat.TIME_AUTO;
+        } else {
+          return IdFormat.INVALID;
+        }
       } else {
-        return IdFormat.INVALID;
+        return IdFormat.TIME_AUTO;
       }
     } else {
       return IdFormat.INVALID;
     }
+  }
+
+  public ArrayList<StreamEntry> getRange(String start, String end) {
+    int startIndex = 0;
+    if (idRegex1.matcher(start).matches()) { // String id
+      while (startIndex < entries.size()) {
+        if (entries.get(startIndex).id.equals(start)) {
+          break;
+        }
+        startIndex++;
+      }
+    } else { // Millis
+      long startTime = Long.valueOf(start);
+      while (startIndex < entries.size()) {
+        if (entries.get(startIndex).timeMillis == startTime) {
+          break;
+        }
+        startIndex++;
+      }
+    }
+
+    int endIndex = entries.size() - 1;
+    if (idRegex1.matcher(end).matches()) { // String id
+      while (endIndex >= 0) {
+        if (entries.get(endIndex).id.equals(end)) {
+          break;
+        }
+        endIndex--;
+      }
+    } else { // Millis
+      long endTime = Long.valueOf(end);
+      while (endIndex >= 0) {
+        if (entries.get(endIndex).timeMillis == endTime) {
+          break;
+        }
+        endIndex--;
+      }
+    }
+
+    return new ArrayList<StreamEntry>(entries.subList(startIndex, endIndex + 1));
+  }
+
+  public String getOutput() {
+    return "Stream";
   }
 }
