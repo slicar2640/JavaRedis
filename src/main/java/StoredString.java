@@ -7,6 +7,6 @@ public class StoredString extends StoredValue {
   }
 
   public String getOutput() {
-    return "$" + value.length() + "\r\n" + value + "\r\n";
+    return Main.bulkString(value);
   }
 }
