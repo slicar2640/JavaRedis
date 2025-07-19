@@ -56,6 +56,7 @@ public class Main {
           inputStream.read(); // \r\n
           inputStream.read(stringBytes, 0, length);
           line[i] = new String(stringBytes);
+          System.out.println(length + " " + line[i]);
           inputStream.read();
           inputStream.read(); // \r\n
         } else {
