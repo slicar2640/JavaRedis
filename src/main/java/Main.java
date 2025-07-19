@@ -13,9 +13,6 @@ public class Main {
   private static HashMap<String, StoredValue> storedData = new HashMap<>();
 
   public static void main(String[] args) {
-    // You can use print statements as follows for debugging, they'll be visible
-    // when running tests.
-    // System.out.println("Logs from your program will appear here!");
 
     ServerSocket serverSocket = null;
     int port = 6379;
