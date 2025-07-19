@@ -181,19 +181,19 @@ public class Main {
               StoredStream stream = (StoredStream) storedData.get(key);
               String startId = line[i + numStreams];
               returnString += "*2\r\n" + bulkString(key);
-              ArrayList<StreamEntry> range = stream.getRange(startId.equals("0-0") ? "-" : startId, "+");
-              returnString += "*" + (range.size() - (startId.equals("0-0") ? 0 : 1)) + "\r\n";
-              for (int j = startId.equals("0-0") ? 0 : 1; j < range.size(); j++) {
+              ArrayList<StreamEntry> range = stream.getRangeFromStartExclusive(startId);
+              returnString += "*" + range.size() + "\r\n";
+              for (int j = 0; j < range.size(); j++) {
                 System.out.println(j);
                 StreamEntry entry = range.get(j);
                 returnString += "*2\r\n";
                 returnString += bulkString(entry.id);
+                System.out.println(entry.values.size() * 2);
                 returnString += "*" + (entry.values.size() * 2) + "\r\n";
                 for (String entryKey : entry.values.keySet()) {
                   returnString += bulkString(entryKey);
                   returnString += bulkString(entry.values.get(entryKey));
                 }
-                System.out.println(returnString);
               }
             }
             outputWriter.write(returnString);

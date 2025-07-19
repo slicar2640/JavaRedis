@@ -30,7 +30,7 @@ public class StoredStream extends StoredValue {
       case TIME_AUTO:
         if (entries.size() > 0) {
           StreamEntry topElement = entries.get(entries.size() - 1);
-          long newMillis = Long.valueOf(id.substring(0, id.indexOf('-')));
+          long newMillis = timeMillis(id);
           if (topElement.timeMillis == newMillis) {
             String correctId = id.substring(0, id.length() - 1) + (topElement.sequenceNum + 1);
             entries.add(new StreamEntry(correctId, newEntries));
@@ -76,11 +76,12 @@ public class StoredStream extends StoredValue {
     } else if (idRegex1.matcher(id).matches()) {
       if (entries.size() > 0) {
         StreamEntry topElement = entries.get(entries.size() - 1);
-        long newMillis = Long.valueOf(id.substring(0, id.indexOf('-')));
+        long newMillis = timeMillis(id);
         if (newMillis < topElement.timeMillis) {
+          System.out.println(id);
           return IdFormat.INVALID;
         } else if (newMillis == topElement.timeMillis) {
-          long newSequence = Long.valueOf(id.substring(id.indexOf('-') + 1));
+          long newSequence = sequenceNum(id);
           if (newSequence > topElement.sequenceNum) {
             return IdFormat.TIME_SEQ;
           } else {
@@ -90,11 +91,11 @@ public class StoredStream extends StoredValue {
           return IdFormat.TIME_SEQ;
         }
       } else {
-        long newMillis = Long.valueOf(id.substring(0, id.indexOf('-')));
+        long newMillis = timeMillis(id);
         if (newMillis > 0) {
           return IdFormat.TIME_SEQ;
         } else {
-          long newSequence = Long.valueOf(id.substring(id.indexOf('-') + 1));
+          long newSequence = sequenceNum(id);
           if (newSequence > 0) {
             return IdFormat.TIME_SEQ;
           } else {
@@ -105,7 +106,7 @@ public class StoredStream extends StoredValue {
     } else if (idRegex2.matcher(id).matches()) {
       if (entries.size() > 0) {
         StreamEntry topElement = entries.get(entries.size() - 1);
-        long newMillis = Long.valueOf(id.substring(0, id.indexOf('-')));
+        long newMillis = timeMillis(id);
         if (newMillis >= topElement.timeMillis) {
           return IdFormat.TIME_AUTO;
         } else {
@@ -128,7 +129,7 @@ public class StoredStream extends StoredValue {
         }
       } else { // Millis
         long startTime = Long.valueOf(start);
-        while (startIndex < entries.size() && !(entries.get(startIndex).timeMillis == startTime)) {
+        while (startIndex < entries.size() && entries.get(startIndex).timeMillis < startTime) {
           startIndex++;
         }
       }
@@ -142,13 +143,51 @@ public class StoredStream extends StoredValue {
         }
       } else { // Millis
         long endTime = Long.valueOf(end);
-        while (endIndex >= 0 && !(entries.get(endIndex).timeMillis == endTime)) {
+        while (endIndex >= 0 && entries.get(endIndex).timeMillis > endTime) {
           endIndex--;
         }
       }
     }
 
     return new ArrayList<StreamEntry>(entries.subList(startIndex, endIndex + 1));
+  }
+
+  public ArrayList<StreamEntry> getRangeFromStartExclusive(String start) {
+    int startIndex = 0;
+    if (!start.equals("-")) {
+      if (idRegex1.matcher(start).matches()) { // String id
+        long startTime = timeMillis(start);
+        while (startIndex < entries.size()) {
+          if(entries.get(startIndex).id.equals(start)) {
+            break;
+          }
+          StreamEntry entry = entries.get(startIndex);
+          if(entry.timeMillis > startTime) {
+            break;
+          } else if(entry.timeMillis == startTime) {
+            if(entry.sequenceNum > sequenceNum(start)) {
+              break;
+            }
+          }
+          startIndex++;
+        }
+      } else { // Millis
+        long startTime = Long.valueOf(start);
+        while (startIndex < entries.size() && entries.get(startIndex).timeMillis <= startTime) {
+          startIndex++;
+        }
+      }
+    }
+
+    return new ArrayList<StreamEntry>(entries.subList(startIndex, entries.size()));
+  }
+
+  static long timeMillis(String id) {
+    return Long.valueOf(id.substring(0, id.indexOf('-')));
+  }
+
+  static long sequenceNum(String id) {
+    return Long.valueOf(id.substring(id.indexOf('-') + 1));
   }
 
   public String getOutput() {
