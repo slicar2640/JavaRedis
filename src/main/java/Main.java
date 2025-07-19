@@ -49,6 +49,7 @@ public class Main {
 
       for (int i = 0; i < line.length; i++) {
         char thisChar = (char) inputStream.read();
+        System.out.println("thisChar: " + thisChar);
         if (thisChar == '$') {
           int length = inputStream.read() - '0';
           byte[] stringBytes = new byte[length];
@@ -56,11 +57,9 @@ public class Main {
           inputStream.read(); // \r\n
           inputStream.read(stringBytes, 0, length);
           line[i] = new String(stringBytes);
-          System.out.println(length + " " + line[i]);
           inputStream.read();
           inputStream.read(); // \r\n
         } else {
-          System.out.println("thisChar: " + thisChar);
           throw new Exception("Not bulk string, probably should deal with this");
         }
       }
@@ -91,7 +90,7 @@ public class Main {
             storedData.put(setKey, stored);
           }
           outputWriter.write("+OK\r\n");
-            outputWriter.flush();
+          outputWriter.flush();
           break;
         case "GET":
           String getKey = line[1];
