@@ -53,7 +53,28 @@ public class StoredStream extends StoredValue {
           return correctId;
         }
       case AUTO:
-        return "not yet";
+        String millis = Long.toString(System.currentTimeMillis());
+        if (entries.size() > 0) {
+          String topId = entries.get(entries.size() - 1).get("id");
+          String topMillis = topId.substring(0, topId.indexOf('-'));
+          if (millis.equals(topMillis)) {
+            long topSequence = Long.valueOf(topId.substring(topId.indexOf('-') + 1));
+            String correctId = id.substring(0, id.length() - 1) + (topSequence + 1);
+            newEntries.put("id", correctId);
+            entries.add(newEntries);
+            return correctId;
+          } else {
+            String correctId = millis + (millis.equals("0-") ? 1 : 0);
+            newEntries.put("id", correctId);
+            entries.add(newEntries);
+            return correctId;
+          }
+        } else {
+          String correctId = millis + "-" + (millis.equals("0") ? 1 : 0);
+          newEntries.put("id", correctId);
+          entries.add(newEntries);
+          return correctId;
+        }
       case INVALID:
         throw new RedisException("ERR The ID specified in XADD is equal or smaller than the target stream top item");
     }
@@ -65,7 +86,7 @@ public class StoredStream extends StoredValue {
   }
 
   IdFormat idFormat(String id) {
-    if (id == "*") {
+    if (id.equals("*")) {
       return IdFormat.AUTO;
     } else if (idRegex1.matcher(id).matches()) {
       if (entries.size() == 0) {
