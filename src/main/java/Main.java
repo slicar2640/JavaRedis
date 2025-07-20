@@ -76,16 +76,14 @@ public class Main {
         }
 
         String command = line[0];
-        switch (command.toUpperCase()) {
+        commandSwitch: switch (command.toUpperCase()) {
           case "PING": {
             outputWriter.write("+PONG\r\n");
-            outputWriter.flush();
             break;
           }
           case "ECHO": {
             String toEcho = line[1];
             outputWriter.write("$" + toEcho.length() + "\r\n" + toEcho + "\r\n");
-            outputWriter.flush();
             break;
           }
           case "SET": {
@@ -100,7 +98,6 @@ public class Main {
               }
             }
             outputWriter.write("+OK\r\n");
-            outputWriter.flush();
             break;
           }
           case "GET": {
@@ -108,10 +105,8 @@ public class Main {
             StoredValue value = storedData.get(key);
             if (value == null) {
               outputWriter.write("$-1\r\n");
-              outputWriter.flush();
             } else {
               outputWriter.write(value.getOutput());
-              outputWriter.flush();
             }
             break;
           }
@@ -120,10 +115,8 @@ public class Main {
             StoredValue value = storedData.get(key);
             if (value == null) {
               outputWriter.write("+none\r\n");
-              outputWriter.flush();
             } else {
               outputWriter.write(simpleString(value.type));
-              outputWriter.flush();
             }
             break;
           }
@@ -144,10 +137,8 @@ public class Main {
               }
               String returnId = stream.addEntries(id, addedEntries);
               outputWriter.write(bulkString(returnId));
-              outputWriter.flush();
             } catch (RedisException e) {
               outputWriter.write(simpleError(e.getMessage()));
-              outputWriter.flush();
             }
             break;
           }
@@ -155,6 +146,10 @@ public class Main {
             String key = line[1];
             StoredStream stream = (StoredStream) storedData.get(key);
             ArrayList<StreamEntry> range = stream.getRange(line[2], line[3]);
+            if (range.size() == 0) {
+              outputWriter.write("$-1\r\n");
+              break;
+            }
             String returnString = "*" + range.size() + "\r\n";
             for (StreamEntry entry : range) {
               returnString += "*2\r\n";
@@ -166,10 +161,12 @@ public class Main {
               }
             }
             outputWriter.write(returnString);
-            outputWriter.flush();
             break;
           }
           case "XREAD": {
+            if (line[1].equalsIgnoreCase("BLOCK")) {
+              Thread.sleep(Long.valueOf(line[2]));
+            }
             int streamsIndex = 0;
             while (streamsIndex < line.length && !line[streamsIndex].equalsIgnoreCase("STREAMS")) {
               streamsIndex++;
@@ -182,13 +179,15 @@ public class Main {
               String startId = line[i + numStreams];
               returnString += "*2\r\n" + bulkString(key);
               ArrayList<StreamEntry> range = stream.getRangeFromStartExclusive(startId);
+              if (range.size() == 0) {
+                outputWriter.write("$-1\r\n");
+                break commandSwitch;
+              }
               returnString += "*" + range.size() + "\r\n";
               for (int j = 0; j < range.size(); j++) {
-                System.out.println(j);
                 StreamEntry entry = range.get(j);
                 returnString += "*2\r\n";
                 returnString += bulkString(entry.id);
-                System.out.println(entry.values.size() * 2);
                 returnString += "*" + (entry.values.size() * 2) + "\r\n";
                 for (String entryKey : entry.values.keySet()) {
                   returnString += bulkString(entryKey);
@@ -197,12 +196,12 @@ public class Main {
               }
             }
             outputWriter.write(returnString);
-            outputWriter.flush();
             break;
           }
           default:
             break;
         }
+        outputWriter.flush();
       }
 
     } catch (IOException e) {

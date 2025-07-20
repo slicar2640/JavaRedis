@@ -158,14 +158,15 @@ public class StoredStream extends StoredValue {
       if (idRegex1.matcher(start).matches()) { // String id
         long startTime = timeMillis(start);
         while (startIndex < entries.size()) {
-          if(entries.get(startIndex).id.equals(start)) {
+          if (entries.get(startIndex).id.equals(start)) {
+            startIndex++;
             break;
           }
           StreamEntry entry = entries.get(startIndex);
-          if(entry.timeMillis > startTime) {
+          if (entry.timeMillis > startTime) {
             break;
-          } else if(entry.timeMillis == startTime) {
-            if(entry.sequenceNum > sequenceNum(start)) {
+          } else if (entry.timeMillis == startTime) {
+            if (entry.sequenceNum > sequenceNum(start)) {
               break;
             }
           }
@@ -178,7 +179,6 @@ public class StoredStream extends StoredValue {
         }
       }
     }
-
     return new ArrayList<StreamEntry>(entries.subList(startIndex, entries.size()));
   }
 
