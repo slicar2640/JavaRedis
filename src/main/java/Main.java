@@ -262,7 +262,7 @@ public class Main {
             if(transactionQueued) {
 
             } else {
-              outputWriter.write(simpleError("ERR Exec without MULTI"));
+              outputWriter.write(simpleError("ERR EXEC without MULTI"));
             }
             break;
           }
