@@ -260,7 +260,8 @@ public class Main {
           }
           case "EXEC": {
             if(transactionQueued) {
-
+              outputWriter.write("*0\r\n");
+              transactionQueued = false;
             } else {
               outputWriter.write(simpleError("ERR EXEC without MULTI"));
             }
