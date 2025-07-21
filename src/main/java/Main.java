@@ -236,7 +236,8 @@ public class Main {
             String key = line[1];
             StoredValue storedValue = storedData.get(key);
             if(storedValue == null) {
-
+              storedData.put(key, new StoredString("1"));
+              outputWriter.write(":1\r\n");
             } else if(storedValue instanceof StoredString) {
               try {
                 StoredString storedString = (StoredString) storedValue;
