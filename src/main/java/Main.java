@@ -90,11 +90,11 @@ public class Main {
             String key = line[1];
             String value = line[2];
             if (line.length == 3) {
-              storedData.put(key, new StoredString(value)); // Hardcoding string
+              storedData.put(key, new StoredString(value));
             } else {
               if (line[3].equalsIgnoreCase("PX")) {
                 long expiry = Long.parseLong(line[4]);
-                storeWithExpiry(key, new StoredString(value), expiry); // Hardcoding string
+                storeWithExpiry(key, new StoredString(value), expiry);
               }
             }
             outputWriter.write("+OK\r\n");
@@ -105,8 +105,8 @@ public class Main {
             StoredValue value = storedData.get(key);
             if (value == null) {
               outputWriter.write("$-1\r\n");
-            } else {
-              outputWriter.write(value.getOutput());
+            } else if(value instanceof StoredString) {
+              outputWriter.write(((StoredString)value).getOutput());
             }
             break;
           }
@@ -230,6 +230,23 @@ public class Main {
               }
             }
             outputWriter.write(returnString);
+            break;
+          }
+          case "INCR": {
+            String key = line[1];
+            StoredValue storedValue = storedData.get(key);
+            if(storedValue == null) {
+
+            } else if(storedValue instanceof StoredString) {
+              try {
+                StoredString storedString = (StoredString) storedValue;
+                int newVal = Integer.parseInt(storedString.value) + 1;
+                storedString.value = String.valueOf(newVal);
+                outputWriter.write(":" + newVal + "\r\n");
+              } catch(NumberFormatException e) {
+
+              }
+            }
             break;
           }
           default:

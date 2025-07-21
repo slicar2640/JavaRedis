@@ -196,8 +196,4 @@ public class StoredStream extends StoredValue {
   static long sequenceNum(String id) {
     return Long.parseLong(id.substring(id.indexOf('-') + 1));
   }
-
-  public String getOutput() {
-    return "Stream";
-  }
 }
