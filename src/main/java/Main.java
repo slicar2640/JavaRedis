@@ -93,7 +93,7 @@ public class Main {
               storedData.put(key, new StoredString(value)); // Hardcoding string
             } else {
               if (line[3].equalsIgnoreCase("PX")) {
-                long expiry = Long.valueOf(line[4]);
+                long expiry = Long.parseLong(line[4]);
                 storeWithExpiry(key, new StoredString(value), expiry); // Hardcoding string
               }
             }
@@ -164,21 +164,55 @@ public class Main {
             break;
           }
           case "XREAD": {
-            if (line[1].equalsIgnoreCase("BLOCK")) {
-              Thread.sleep(Long.valueOf(line[2]));
-            }
             int streamsIndex = 0;
             while (streamsIndex < line.length && !line[streamsIndex].equalsIgnoreCase("STREAMS")) {
               streamsIndex++;
             }
             int numStreams = (line.length - 1 - streamsIndex) / 2;
+            String[] topIds = new String[numStreams];
+            if (line[1].equalsIgnoreCase("BLOCK")) {
+              for (int i = streamsIndex + 1; i <= streamsIndex + numStreams; i++) {
+                StoredStream stream = (StoredStream) storedData.get(line[i]);
+                topIds[i - streamsIndex - 1] = stream.entries.get(stream.entries.size() - 1).id;
+              }
+              long blockTime = Long.parseLong(line[2]);
+              if (blockTime == 0) {
+                // BLOCK 0: wait indefinitely for data
+                boolean dataAvailable = false;
+                while (!dataAvailable) {
+                  for (int i = streamsIndex + 1; i <= streamsIndex + numStreams; i++) {
+                    String streamKey = line[i];
+                    StoredStream stream = (StoredStream) storedData.get(streamKey);
+                    String topId = topIds[i - streamsIndex - 1];
+
+                    synchronized (stream) {
+                      ArrayList<StreamEntry> newEntries = stream.getRangeFromStartExclusive(topId);
+                      if (!newEntries.isEmpty()) {
+                        dataAvailable = true;
+                        break;
+                      } else {
+                        stream.wait();
+                      }
+                    }
+                  }
+                }
+              } else {
+                Thread.sleep(blockTime);
+              }
+            }
             String returnString = "*" + numStreams + "\r\n";
             for (int i = streamsIndex + 1; i <= streamsIndex + numStreams; i++) {
               String key = line[i];
+              returnString += "*2\r\n" + bulkString(key);
               StoredStream stream = (StoredStream) storedData.get(key);
               String startId = line[i + numStreams];
-              returnString += "*2\r\n" + bulkString(key);
-              ArrayList<StreamEntry> range = stream.getRangeFromStartExclusive(startId);
+              ArrayList<StreamEntry> range;
+              if (startId.equals("$")) {
+                range = stream.getRangeFromStartExclusive(topIds[i - streamsIndex - 1]);
+              } else {
+                range = stream.getRangeFromStartExclusive(startId);
+              }
+
               if (range.size() == 0) {
                 outputWriter.write("$-1\r\n");
                 break commandSwitch;
@@ -207,7 +241,7 @@ public class Main {
     } catch (IOException e) {
       System.out.println("IOException: " + e.getMessage());
     } catch (Exception e) {
-      System.out.println("Exception: " + e.getMessage());
+      System.out.println(e.toString());
     }
   }
 

@@ -4,6 +4,7 @@ import java.util.regex.Pattern;
 
 public class StoredStream extends StoredValue {
   public ArrayList<StreamEntry> entries = new ArrayList<>();
+  // private final ArrayList<Thread> waiters = new ArrayList<>();
   private static final Pattern idRegex1 = Pattern.compile("\\d+-\\d+");
   private static final Pattern idRegex2 = Pattern.compile("\\d+-\\*");
 
@@ -19,55 +20,62 @@ public class StoredStream extends StoredValue {
   }
 
   public String addEntries(String id, HashMap<String, String> newEntries) throws RedisException {
-    if (id.equals("0-0")) {
-      throw new RedisException("ERR The ID specified in XADD must be greater than 0-0");
-    }
-    IdFormat format = idFormat(id);
-    switch (format) {
-      case TIME_SEQ:
-        entries.add(new StreamEntry(id, newEntries));
-        return id;
-      case TIME_AUTO:
-        if (entries.size() > 0) {
-          StreamEntry topElement = entries.get(entries.size() - 1);
-          long newMillis = timeMillis(id);
-          if (topElement.timeMillis == newMillis) {
-            String correctId = id.substring(0, id.length() - 1) + (topElement.sequenceNum + 1);
-            entries.add(new StreamEntry(correctId, newEntries));
-            return correctId;
+    synchronized (this) {
+      if (id.equals("0-0")) {
+        throw new RedisException("ERR The ID specified in XADD must be greater than 0-0");
+      }
+      IdFormat format = idFormat(id);
+      String returnId = "";
+      switch (format) {
+        case TIME_SEQ:
+          entries.add(new StreamEntry(id, newEntries));
+          returnId = id;
+          break;
+        case TIME_AUTO:
+          if (entries.size() > 0) {
+            StreamEntry topElement = entries.get(entries.size() - 1);
+            long newMillis = timeMillis(id);
+            if (topElement.timeMillis == newMillis) {
+              String correctId = id.substring(0, id.length() - 1) + (topElement.sequenceNum + 1);
+              entries.add(new StreamEntry(correctId, newEntries));
+              returnId = correctId;
+            } else {
+              String correctId = id.substring(0, id.length() - 1) + (newMillis == 0 ? "1" : "0");
+              entries.add(new StreamEntry(correctId, newEntries));
+              returnId = correctId;
+            }
           } else {
-            String correctId = id.substring(0, id.length() - 1) + (newMillis == 0 ? "1" : "0");
+            String withoutAsterisk = id.substring(0, id.length() - 1);
+            String correctId = withoutAsterisk + (withoutAsterisk.equals("0-") ? 1 : 0);
             entries.add(new StreamEntry(correctId, newEntries));
-            return correctId;
+            returnId = correctId;
           }
-        } else {
-          String withoutAsterisk = id.substring(0, id.length() - 1);
-          String correctId = withoutAsterisk + (withoutAsterisk.equals("0-") ? 1 : 0);
-          entries.add(new StreamEntry(correctId, newEntries));
-          return correctId;
-        }
-      case AUTO:
-        long millis = System.currentTimeMillis();
-        if (entries.size() > 0) {
-          StreamEntry topElement = entries.get(entries.size() - 1);
-          if (millis == topElement.timeMillis) {
-            String correctId = id.substring(0, id.length() - 1) + (topElement.sequenceNum + 1);
-            entries.add(new StreamEntry(correctId, newEntries));
-            return correctId;
+          break;
+        case AUTO:
+          long millis = System.currentTimeMillis();
+          if (entries.size() > 0) {
+            StreamEntry topElement = entries.get(entries.size() - 1);
+            if (millis == topElement.timeMillis) {
+              String correctId = id.substring(0, id.length() - 1) + (topElement.sequenceNum + 1);
+              entries.add(new StreamEntry(correctId, newEntries));
+              returnId = correctId;
+            } else {
+              String correctId = millis + (millis == 0 ? "1" : "0");
+              entries.add(new StreamEntry(correctId, newEntries));
+              returnId = correctId;
+            }
           } else {
-            String correctId = millis + (millis == 0 ? "1" : "0");
+            String correctId = millis + "-" + (millis == 0 ? "1" : "0");
             entries.add(new StreamEntry(correctId, newEntries));
-            return correctId;
+            returnId = correctId;
           }
-        } else {
-          String correctId = millis + "-" + (millis == 0 ? "1" : "0");
-          entries.add(new StreamEntry(correctId, newEntries));
-          return correctId;
-        }
-      case INVALID:
-        throw new RedisException("ERR The ID specified in XADD is equal or smaller than the target stream top item");
+          break;
+        case INVALID:
+          throw new RedisException("ERR The ID specified in XADD is equal or smaller than the target stream top item");
+      }
+      this.notifyAll();
+      return returnId;
     }
-    return null;
   }
 
   IdFormat idFormat(String id) {
@@ -78,7 +86,6 @@ public class StoredStream extends StoredValue {
         StreamEntry topElement = entries.get(entries.size() - 1);
         long newMillis = timeMillis(id);
         if (newMillis < topElement.timeMillis) {
-          System.out.println(id);
           return IdFormat.INVALID;
         } else if (newMillis == topElement.timeMillis) {
           long newSequence = sequenceNum(id);
@@ -128,7 +135,7 @@ public class StoredStream extends StoredValue {
           startIndex++;
         }
       } else { // Millis
-        long startTime = Long.valueOf(start);
+        long startTime = Long.parseLong(start);
         while (startIndex < entries.size() && entries.get(startIndex).timeMillis < startTime) {
           startIndex++;
         }
@@ -142,7 +149,7 @@ public class StoredStream extends StoredValue {
           endIndex--;
         }
       } else { // Millis
-        long endTime = Long.valueOf(end);
+        long endTime = Long.parseLong(end);
         while (endIndex >= 0 && entries.get(endIndex).timeMillis > endTime) {
           endIndex--;
         }
@@ -173,7 +180,7 @@ public class StoredStream extends StoredValue {
           startIndex++;
         }
       } else { // Millis
-        long startTime = Long.valueOf(start);
+        long startTime = Long.parseLong(start);
         while (startIndex < entries.size() && entries.get(startIndex).timeMillis <= startTime) {
           startIndex++;
         }
@@ -183,11 +190,11 @@ public class StoredStream extends StoredValue {
   }
 
   static long timeMillis(String id) {
-    return Long.valueOf(id.substring(0, id.indexOf('-')));
+    return Long.parseLong(id.substring(0, id.indexOf('-')));
   }
 
   static long sequenceNum(String id) {
-    return Long.valueOf(id.substring(id.indexOf('-') + 1));
+    return Long.parseLong(id.substring(id.indexOf('-') + 1));
   }
 
   public String getOutput() {

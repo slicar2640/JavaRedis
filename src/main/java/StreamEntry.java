@@ -8,8 +8,8 @@ public class StreamEntry {
 
   public StreamEntry(String id, HashMap<String, String> values) {
     this.id = id;
-    timeMillis = Long.valueOf(id.substring(0, id.indexOf('-')));
-    sequenceNum = Long.valueOf(id.substring(id.indexOf('-') + 1));
+    timeMillis = Long.parseLong(id.substring(0, id.indexOf('-')));
+    sequenceNum = Long.parseLong(id.substring(id.indexOf('-') + 1));
     this.values = values;
   }
 }
