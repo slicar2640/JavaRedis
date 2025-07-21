@@ -37,6 +37,8 @@ public class Main {
         BufferedWriter outputWriter = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
         InputStream inputStream = clientSocket.getInputStream();) {
       System.out.println("New client connected");
+      ArrayList<String[]> transaction = new ArrayList<>();
+      boolean transactionQueued = false;
       while (true) {
         String[] line;
         int firstByte = inputStream.read();
@@ -105,8 +107,8 @@ public class Main {
             StoredValue value = storedData.get(key);
             if (value == null) {
               outputWriter.write("$-1\r\n");
-            } else if(value instanceof StoredString) {
-              outputWriter.write(((StoredString)value).getOutput());
+            } else if (value instanceof StoredString) {
+              outputWriter.write(((StoredString) value).getOutput());
             }
             break;
           }
@@ -235,20 +237,25 @@ public class Main {
           case "INCR": {
             String key = line[1];
             StoredValue storedValue = storedData.get(key);
-            if(storedValue == null) {
+            if (storedValue == null) {
               storedData.put(key, new StoredString("1"));
               outputWriter.write(":1\r\n");
-            } else if(storedValue instanceof StoredString) {
+            } else if (storedValue instanceof StoredString) {
               try {
                 StoredString storedString = (StoredString) storedValue;
                 int newVal = Integer.parseInt(storedString.value) + 1;
                 storedString.value = String.valueOf(newVal);
                 outputWriter.write(":" + newVal + "\r\n");
-              } catch(NumberFormatException e) {
+              } catch (NumberFormatException e) {
                 outputWriter.write(simpleError("ERR value is not an integer or out of range"));
               }
             }
             break;
+          }
+          case "MULTI": {
+            transactionQueued = true;
+            transaction.clear();
+            outputWriter.write("+OK\r\n");
           }
           default:
             break;
