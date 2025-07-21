@@ -256,6 +256,15 @@ public class Main {
             transactionQueued = true;
             transaction.clear();
             outputWriter.write("+OK\r\n");
+            break;
+          }
+          case "EXEC": {
+            if(transactionQueued) {
+
+            } else {
+              outputWriter.write(simpleError("ERR Exec without MULTI"));
+            }
+            break;
           }
           default:
             break;
