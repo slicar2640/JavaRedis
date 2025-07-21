@@ -245,7 +245,7 @@ public class Main {
                 storedString.value = String.valueOf(newVal);
                 outputWriter.write(":" + newVal + "\r\n");
               } catch(NumberFormatException e) {
-
+                outputWriter.write(simpleError("ERR value is not an integer or out of range"));
               }
             }
             break;
