@@ -116,6 +116,10 @@ public class Main {
           returnString += commandReturns[i];
         }
         return returnString;
+      } else if(command.equalsIgnoreCase("DISCARD")) {
+        transaction.clear();
+        transactionQueued.value = false;
+        return "+OK\r\n";
       } else {
         transaction.add(line);
         return simpleString("QUEUED");
@@ -295,6 +299,9 @@ public class Main {
         }
         case "EXEC": { // Won't ever be here if transactionQueued == true
           return simpleError("ERR EXEC without MULTI");
+        }
+        case "DISCARD": { // Won't ever be here if transactionQueued == true
+          return simpleError("ERR DISCARD without MULTI");
         }
         default:
           return simpleError("ERR: Command " + command.toUpperCase() + " not found");
