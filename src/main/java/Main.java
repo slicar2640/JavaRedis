@@ -1,6 +1,7 @@
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -34,9 +35,13 @@ public class Main {
               String hostAddr = address[0];
               int portAddr = Integer.valueOf(address[1]);
               Socket master = new Socket(hostAddr, portAddr);
-              master.getOutputStream().write("*1\r\n$4\r\nPING\r\n".getBytes());
-              master.getOutputStream().flush();
-              master.close();
+              OutputStream outputStream = master.getOutputStream();
+              outputStream.write("*1\r\n$4\r\nPING\r\n".getBytes());
+              outputStream.flush();
+              outputStream.write(("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n" + port + "\r\n").getBytes());
+              outputStream.flush();
+              outputStream.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n".getBytes());
+              outputStream.flush();
               i++;
               break;
           }
