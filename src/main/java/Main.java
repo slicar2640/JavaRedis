@@ -359,6 +359,8 @@ public class Main {
           }
           return bulkString(returnString);
         }
+        case "REPLCONF":
+        return "+OK\r\n";
         default:
           return simpleError("ERR: Command " + command.toUpperCase() + " not found");
       }
