@@ -16,7 +16,7 @@ public class Main {
 
     ServerSocket serverSocket = null;
     int port = 6379;
-    if(args.length > 1 && args[0].equalsIgnoreCase("--port")) {
+    if (args.length > 1 && args[0].equalsIgnoreCase("--port")) {
       port = Integer.parseInt(args[1]);
     }
     try {
@@ -119,7 +119,7 @@ public class Main {
           returnString += commandReturns[i];
         }
         return returnString;
-      } else if(command.equalsIgnoreCase("DISCARD")) {
+      } else if (command.equalsIgnoreCase("DISCARD")) {
         transaction.clear();
         transactionQueued.value = false;
         return "+OK\r\n";
@@ -305,6 +305,24 @@ public class Main {
         }
         case "DISCARD": { // Won't ever be here if transactionQueued == true
           return simpleError("ERR DISCARD without MULTI");
+        }
+        case "INFO": {
+          String returnString = "";
+          for (int i = 1; i < line.length; i++) {
+            String section = line[i].toLowerCase();
+            switch (section) {
+              case "replication":
+                if(i > 1) {
+                  returnString += "\r\n";
+                }
+                returnString += "# Replication\r\n";
+                returnString += "role:" + "master";
+                break;
+              default:
+                return simpleError("ERR: Invalid section [" + section + "] for INFO command");
+            }
+            return bulkString(returnString);
+          }
         }
         default:
           return simpleError("ERR: Command " + command.toUpperCase() + " not found");
