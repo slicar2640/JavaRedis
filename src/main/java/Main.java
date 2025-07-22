@@ -1,7 +1,8 @@
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -35,13 +36,20 @@ public class Main {
               String hostAddr = address[0];
               int portAddr = Integer.valueOf(address[1]);
               Socket master = new Socket(hostAddr, portAddr);
-              OutputStream outputStream = master.getOutputStream();
-              outputStream.write("*1\r\n$4\r\nPING\r\n".getBytes());
-              outputStream.flush();
-              outputStream.write(("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n" + port + "\r\n").getBytes());
-              outputStream.flush();
-              outputStream.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n".getBytes());
-              outputStream.flush();
+              BufferedWriter outputWriter = new BufferedWriter(new OutputStreamWriter(master.getOutputStream()));
+              BufferedReader inputReader = new BufferedReader(new InputStreamReader(master.getInputStream()));
+              outputWriter.write("*1\r\n$4\r\nPING\r\n");
+              outputWriter.flush();
+              inputReader.readLine();
+              outputWriter
+                  .write("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n" + port + "\r\n");
+              outputWriter.flush();
+              inputReader.readLine();
+              outputWriter.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n");
+              outputWriter.flush();
+              inputReader.readLine();
+              outputWriter.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n");
+              outputWriter.flush();
               i++;
               break;
           }
