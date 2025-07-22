@@ -10,14 +10,28 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 public class Main {
-  private static HashMap<String, StoredValue> storedData = new HashMap<>();
+  static HashMap<String, StoredValue> storedData = new HashMap<>();
+  static int port = 6379;
+  static String role = "master";
+  static String masterServerAddress = "";
 
   public static void main(String[] args) {
 
     ServerSocket serverSocket = null;
-    int port = 6379;
-    if (args.length > 1 && args[0].equalsIgnoreCase("--port")) {
-      port = Integer.parseInt(args[1]);
+    for (int i = 0; i < args.length; i++) {
+      if (args[i].startsWith("--")) {
+        switch (args[i].toLowerCase()) {
+          case "--port":
+            port = Integer.parseInt(args[i + 1]);
+            i++;
+            break;
+          case "--replicaof":
+            role = "slave";
+            masterServerAddress = args[i + 1];
+            i++;
+            break;
+        }
+      }
     }
     try {
       serverSocket = new ServerSocket(port);
@@ -27,7 +41,6 @@ public class Main {
 
       while (true) {
         Socket clientSocket = serverSocket.accept();
-        System.out.println("a");
         new Thread(() -> handleClient(clientSocket)).start();
       }
 
@@ -312,11 +325,11 @@ public class Main {
             String section = line[i].toLowerCase();
             switch (section) {
               case "replication":
-                if(i > 1) {
+                if (i > 1) {
                   returnString += "\r\n";
                 }
                 returnString += "# Replication\r\n";
-                returnString += "role:" + "master";
+                returnString += "role:" + role;
                 break;
               default:
                 return simpleError("ERR: Invalid section [" + section + "] for INFO command");
