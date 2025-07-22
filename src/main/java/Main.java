@@ -14,6 +14,8 @@ public class Main {
   static int port = 6379;
   static String role = "master";
   static String masterServerAddress = "";
+  static String masterReplid = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
+  static int masterReplOffset = 0;
 
   public static void main(String[] args) {
 
@@ -330,6 +332,8 @@ public class Main {
                 }
                 returnString += "# Replication\r\n";
                 returnString += "role:" + role;
+                returnString += "master_replid:" + masterReplid;
+                returnString += "master_repl_offset:" + masterReplOffset;
                 break;
               default:
                 return simpleError("ERR: Invalid section [" + section + "] for INFO command");
