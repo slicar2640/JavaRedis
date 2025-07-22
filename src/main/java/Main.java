@@ -18,24 +18,30 @@ public class Main {
   static int masterReplOffset = 0;
 
   public static void main(String[] args) {
-
     ServerSocket serverSocket = null;
-    for (int i = 0; i < args.length; i++) {
-      if (args[i].startsWith("--")) {
-        switch (args[i].toLowerCase()) {
-          case "--port":
-            port = Integer.parseInt(args[i + 1]);
-            i++;
-            break;
-          case "--replicaof":
-            role = "slave";
-            masterServerAddress = args[i + 1];
-            i++;
-            break;
+    try {
+      for (int i = 0; i < args.length; i++) {
+        if (args[i].startsWith("--")) {
+          switch (args[i].toLowerCase()) {
+            case "--port":
+              port = Integer.parseInt(args[i + 1]);
+              i++;
+              break;
+            case "--replicaof":
+              role = "slave";
+              masterServerAddress = args[i + 1];
+              String[] address = masterServerAddress.split(" ");
+              String hostAddr = address[0];
+              int portAddr = Integer.valueOf(address[1]);
+              Socket master = new Socket(hostAddr, portAddr);
+              master.getOutputStream().write("*1\r\n$4\r\nPING\r\n".getBytes());
+              master.getOutputStream().flush();
+              master.close();
+              i++;
+              break;
+          }
         }
       }
-    }
-    try {
       serverSocket = new ServerSocket(port);
       // Since the tester restarts your program quite often, setting SO_REUSEADDR
       // ensures that we don't run into 'Address already in use' errors
@@ -45,7 +51,6 @@ public class Main {
         Socket clientSocket = serverSocket.accept();
         new Thread(() -> handleClient(clientSocket)).start();
       }
-
     } catch (IOException e) {
       System.out.println(e.toString());
     }
@@ -338,8 +343,8 @@ public class Main {
               default:
                 return simpleError("ERR: Invalid section [" + section + "] for INFO command");
             }
-            return bulkString(returnString);
           }
+          return bulkString(returnString);
         }
         default:
           return simpleError("ERR: Command " + command.toUpperCase() + " not found");
