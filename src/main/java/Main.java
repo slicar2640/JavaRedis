@@ -360,7 +360,13 @@ public class Main {
           return bulkString(returnString);
         }
         case "REPLCONF":
-        return "+OK\r\n";
+          return "+OK\r\n";
+        case "PSYNC": {
+          if(role.equals("master")) {
+            String replid = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
+            return simpleString("FULLRESYNC " + replid + " 0");
+          }
+        }
         default:
           return simpleError("ERR: Command " + command.toUpperCase() + " not found");
       }
