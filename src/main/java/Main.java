@@ -483,6 +483,15 @@ public class Main {
           }
           break;
         }
+        case "WAIT": {
+          if(role.equals("master")) {
+            int numReplicas = Integer.parseInt(line[1]);
+            int waitTime = Integer.parseInt(line[2]);
+            outputStream.write(":0\r\n".getBytes());
+            outputStream.flush();
+          }
+          break;
+        }
         default:
           outputStream.write(simpleError("ERR: Command " + command.toUpperCase() + " not found").getBytes());
           outputStream.flush();
