@@ -484,10 +484,30 @@ public class Main {
           break;
         }
         case "WAIT": {
-          if(role.equals("master")) {
+          if (role.equals("master")) {
             int numReplicas = Integer.parseInt(line[1]);
-            int waitTime = Integer.parseInt(line[2]);
-            outputStream.write(":0\r\n".getBytes());
+            // int waitTime = Integer.parseInt(line[2]);
+            // int numResponded = 0;
+            // if (waitTime > 0) {
+            //   Timer timer = new Timer();
+            //   timer.schedule(
+            //       new TimerTask() {
+            //         @Override
+            //         public void run() {
+            //           try {
+            //             outputStream.write(redisInteger(numResponded).getBytes());
+            //             outputStream.flush();
+            //           } catch (IOException e) {
+            //             System.out.println(e.toString());
+            //           }
+            //         }
+            //       },
+            //       waitTime);
+            // }
+            // for (OutputStream stream : replicaOutputStreams) {
+            //   numResponded++;
+            // }
+            outputStream.write(redisInteger(replicaOutputStreams.size()).getBytes());
             outputStream.flush();
           }
           break;
@@ -518,6 +538,10 @@ public class Main {
       returnString += bulkString(s);
     }
     return returnString;
+  }
+
+  static String redisInteger(int input) {
+    return ":" + Integer.toString(input) + "\r\n";
   }
 
   static String readSimpleString(InputStream inputStream) {
