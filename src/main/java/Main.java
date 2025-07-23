@@ -1,9 +1,9 @@
 import java.io.BufferedReader;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -41,7 +41,8 @@ public class Main {
               int portAddr = Integer.valueOf(address[1]);
               Socket master = new Socket(hostAddr, portAddr);
               OutputStream outputStream = master.getOutputStream();
-              BufferedReader inputReader = new BufferedReader(new InputStreamReader(master.getInputStream()));
+              InputStream inputStream = master.getInputStream();
+              BufferedReader inputReader = new BufferedReader(new InputStreamReader(inputStream));
               outputStream.write("*1\r\n$4\r\nPING\r\n".getBytes());
               outputStream.flush();
               inputReader.readLine();
@@ -55,6 +56,18 @@ public class Main {
               outputStream.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n".getBytes());
               outputStream.flush();
               inputReader.readLine();
+
+              new Thread(() -> {
+                try {
+                  while (true) {
+                    String[] line = readLineFromInputStream(inputStream);
+                    parseCommand(inputStream, outputStream, line, new BooleanWrapper(false), null);
+                  }
+                } catch (Exception e) {
+                  System.out.println("Replication error: " + e.toString());
+                }
+              }).start();
+
               i++;
               break;
           }
@@ -82,49 +95,58 @@ public class Main {
       ArrayList<String[]> transaction = new ArrayList<>();
       BooleanWrapper transactionQueued = new BooleanWrapper(false);
       while (true) {
-        String[] line;
-        int firstByte = inputStream.read();
-        if (firstByte == -1)
-          break; // client closed connection
-        if ((char) firstByte == '*') {
-          int length = 0;
-          int digit = 0;
-          while ((digit = inputStream.read()) != '\r') {
-            length = length * 10 + (digit - '0');
-          }
-          inputStream.read(); // \n
-          line = new String[length];
-        } else {
-          throw new Exception("Doesn't start with *");
+        try {
+          String[] line = readLineFromInputStream(inputStream);
+          parseCommand(inputStream, outputStream, line, transactionQueued, transaction);
+        } catch (EOFException e) {
+          break;
         }
-
-        for (int i = 0; i < line.length; i++) {
-          char thisChar = (char) inputStream.read();
-          if (thisChar == '$') {
-            int length = 0;
-            int digit = 0;
-            while ((digit = inputStream.read()) != '\r') {
-              length = length * 10 + (digit - '0');
-            }
-
-            inputStream.read(); // \n
-            byte[] stringBytes = new byte[length];
-            inputStream.read(stringBytes, 0, length);
-            line[i] = new String(stringBytes);
-            inputStream.read();
-            inputStream.read(); // \r\n
-          } else {
-            System.out.println("thisChar: " + thisChar);
-            throw new Exception("Not bulk string, probably should deal with this");
-          }
-        }
-        parseCommand(inputStream, outputStream, line, transactionQueued, transaction);
       }
     } catch (IOException e) {
       System.out.println("IOException: " + e.getMessage());
     } catch (Exception e) {
       System.out.println(e.toString());
     }
+  }
+
+  static String[] readLineFromInputStream(InputStream inputStream) throws EOFException, IOException {
+    String[] line;
+    int firstByte = inputStream.read();
+    if (firstByte == -1)
+      throw new EOFException(); // client closed connection
+    if ((char) firstByte == '*') {
+      int length = 0;
+      int digit = 0;
+      while ((digit = inputStream.read()) != '\r') {
+        length = length * 10 + (digit - '0');
+      }
+      inputStream.read(); // \n
+      line = new String[length];
+    } else {
+      throw new IOException("Doesn't start with *");
+    }
+
+    for (int i = 0; i < line.length; i++) {
+      char thisChar = (char) inputStream.read();
+      if (thisChar == '$') {
+        int length = 0;
+        int digit = 0;
+        while ((digit = inputStream.read()) != '\r') {
+          length = length * 10 + (digit - '0');
+        }
+
+        inputStream.read(); // \n
+        byte[] stringBytes = new byte[length];
+        inputStream.read(stringBytes, 0, length);
+        line[i] = new String(stringBytes);
+        inputStream.read();
+        inputStream.read(); // \r\n
+      } else {
+        System.out.println("thisChar: " + thisChar);
+        throw new IOException("Not bulk string, probably should deal with this");
+      }
+    }
+    return line;
   }
 
   static void storeWithExpiry(String key, StoredValue value, long expiryMillis) {
