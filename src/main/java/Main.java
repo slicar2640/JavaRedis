@@ -3,10 +3,12 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -18,6 +20,8 @@ public class Main {
   static String masterServerAddress = "";
   static String masterReplid = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
   static int masterReplOffset = 0;
+  static final byte[] emptyRDB = Base64.getDecoder().decode(
+      "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==");
 
   public static void main(String[] args) {
     ServerSocket serverSocket = null;
@@ -71,7 +75,7 @@ public class Main {
 
   static void handleClient(Socket clientSocket) {
     try (clientSocket; // automatically closes socket at the end
-        BufferedWriter outputWriter = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
+        OutputStream outputStream = clientSocket.getOutputStream();
         InputStream inputStream = clientSocket.getInputStream();) {
       System.out.println("New client connected");
       ArrayList<String[]> transaction = new ArrayList<>();
@@ -113,9 +117,7 @@ public class Main {
             throw new Exception("Not bulk string, probably should deal with this");
           }
         }
-        String output = parseCommand(line, transactionQueued, transaction);
-        outputWriter.write(output);
-        outputWriter.flush();
+        parseCommand(inputStream, outputStream, line, transactionQueued, transaction);
       }
     } catch (IOException e) {
       System.out.println("IOException: " + e.getMessage());
@@ -137,37 +139,45 @@ public class Main {
         expiryMillis);
   }
 
-  static String parseCommand(String[] line, BooleanWrapper transactionQueued, ArrayList<String[]> transaction)
-      throws InterruptedException {
+  static void parseCommand(InputStream inputStream, OutputStream outputStream, String[] line,
+      BooleanWrapper transactionQueued, ArrayList<String[]> transaction)
+      throws InterruptedException, IOException {
+        BufferedWriter outputWriter = new BufferedWriter(new OutputStreamWriter(outputStream));
     String command = line[0];
     if (transactionQueued.value) {
       if (command.equalsIgnoreCase("EXEC")) {
         transactionQueued.value = false;
         String[] commandReturns = new String[transaction.size()];
+        outputWriter.write("*" + commandReturns.length + "\r\n");
+        outputWriter.flush();
         for (int i = 0; i < transaction.size(); i++) {
-          commandReturns[i] = parseCommand(transaction.get(i), new BooleanWrapper(false), null);
+          parseCommand(inputStream, outputStream, transaction.get(i), new BooleanWrapper(false), null);
         }
-        String returnString = "*" + commandReturns.length + "\r\n";
-        for (int i = 0; i < commandReturns.length; i++) {
-          returnString += commandReturns[i];
-        }
-        return returnString;
+        outputWriter.flush();
       } else if (command.equalsIgnoreCase("DISCARD")) {
         transaction.clear();
         transactionQueued.value = false;
-        return "+OK\r\n";
+        outputWriter.write("+OK\r\n");
+        outputWriter.flush();
+        return;
       } else {
         transaction.add(line);
-        return simpleString("QUEUED");
+        outputWriter.write(simpleString("QUEUED"));
+        outputWriter.flush();
+        return;
       }
     } else {
       switch (command.toUpperCase()) {
         case "PING": {
-          return "+PONG\r\n";
+          outputWriter.write("+PONG\r\n");
+          outputWriter.flush();
+          break;
         }
         case "ECHO": {
           String toEcho = line[1];
-          return "$" + toEcho.length() + "\r\n" + toEcho + "\r\n";
+          outputWriter.write("$" + toEcho.length() + "\r\n" + toEcho + "\r\n");
+          outputWriter.flush();
+          break;
         }
         case "SET": {
           String key = line[1];
@@ -180,27 +190,33 @@ public class Main {
               storeWithExpiry(key, new StoredString(value), expiry);
             }
           }
-          return "+OK\r\n";
+          outputWriter.write("+OK\r\n");
+          outputWriter.flush();
+          break;
         }
         case "GET": {
           String key = line[1];
           StoredValue value = storedData.get(key);
           if (value == null) {
-            return "$-1\r\n";
+            outputWriter.write("$-1\r\n");
           } else if (value instanceof StoredString) {
-            return ((StoredString) value).getOutput();
+            outputWriter.write(((StoredString) value).getOutput());
           } else {
-            return "$-1\r\n";
+            outputWriter.write("$-1\r\n");
           }
+          outputWriter.flush();
+          break;
         }
         case "TYPE": {
           String key = line[1];
           StoredValue value = storedData.get(key);
           if (value == null) {
-            return "+none\r\n";
+            outputWriter.write("+none\r\n");
           } else {
-            return simpleString(value.type);
+            outputWriter.write(simpleString(value.type));
           }
+          outputWriter.flush();
+          break;
         }
         case "XADD": {
           String key = line[1];
@@ -218,9 +234,13 @@ public class Main {
               addedEntries.put(line[i], line[i + 1]);
             }
             String returnId = stream.addEntries(id, addedEntries);
-            return bulkString(returnId);
+            outputWriter.write(bulkString(returnId));
+            outputWriter.flush();
+            break;
           } catch (RedisException e) {
-            return simpleError(e.getMessage());
+            outputWriter.write(simpleError(e.getMessage()));
+            outputWriter.flush();
+            break;
           }
         }
         case "XRANGE": {
@@ -228,7 +248,9 @@ public class Main {
           StoredStream stream = (StoredStream) storedData.get(key);
           ArrayList<StreamEntry> range = stream.getRange(line[2], line[3]);
           if (range.size() == 0) {
-            return "$-1\r\n";
+            outputWriter.write("$-1\r\n");
+            outputWriter.flush();
+            break;
           }
           String returnString = "*" + range.size() + "\r\n";
           for (StreamEntry entry : range) {
@@ -240,7 +262,9 @@ public class Main {
               returnString += bulkString(entry.values.get(entryKey));
             }
           }
-          return returnString;
+          outputWriter.write(returnString);
+          outputWriter.flush();
+          break;
         }
         case "XREAD": {
           int streamsIndex = 0;
@@ -293,7 +317,9 @@ public class Main {
             }
 
             if (range.size() == 0) {
-              return "$-1\r\n";
+              outputWriter.write("$-1\r\n");
+              outputWriter.flush();
+              break;
             }
             returnString += "*" + range.size() + "\r\n";
             for (int j = 0; j < range.size(); j++) {
@@ -307,37 +333,51 @@ public class Main {
               }
             }
           }
-          return returnString;
+          outputWriter.write(returnString);
+          outputWriter.flush();
+          break;
         }
         case "INCR": {
           String key = line[1];
           StoredValue storedValue = storedData.get(key);
           if (storedValue == null) {
             storedData.put(key, new StoredString("1"));
-            return ":1\r\n";
+            outputWriter.write(":1\r\n");
           } else if (storedValue instanceof StoredString) {
             try {
               StoredString storedString = (StoredString) storedValue;
               int newVal = Integer.parseInt(storedString.value) + 1;
               storedString.value = String.valueOf(newVal);
-              return ":" + newVal + "\r\n";
+              outputWriter.write(":" + newVal + "\r\n");
             } catch (NumberFormatException e) {
-              return simpleError("ERR value is not an integer or out of range");
+              outputWriter.write(simpleError("ERR value is not an integer or out of range"));
+              outputWriter.flush();
+              break;
             }
           } else {
-            return simpleError("Incremented value isn't a string");
+            outputWriter.write(simpleError("Incremented value isn't a string"));
+            outputWriter.flush();
+            break;
           }
+          outputWriter.flush();
+          break;
         }
         case "MULTI": {
           transactionQueued.value = true;
           transaction.clear();
-          return "+OK\r\n";
+          outputWriter.write("+OK\r\n");
+          outputWriter.flush();
+          break;
         }
         case "EXEC": { // Won't ever be here if transactionQueued == true
-          return simpleError("ERR EXEC without MULTI");
+          outputWriter.write(simpleError("ERR EXEC without MULTI"));
+          outputWriter.flush();
+          break;
         }
         case "DISCARD": { // Won't ever be here if transactionQueued == true
-          return simpleError("ERR DISCARD without MULTI");
+          outputWriter.write(simpleError("ERR DISCARD without MULTI"));
+          outputWriter.flush();
+          break;
         }
         case "INFO": {
           String returnString = "";
@@ -354,21 +394,38 @@ public class Main {
                 returnString += "master_repl_offset:" + masterReplOffset;
                 break;
               default:
-                return simpleError("ERR: Invalid section [" + section + "] for INFO command");
+                outputWriter.write(simpleError("ERR: Invalid section [" + section + "] for INFO command"));
+                outputWriter.flush();
+                break;
             }
           }
-          return bulkString(returnString);
+          outputWriter.write(bulkString(returnString));
+          outputWriter.flush();
+          break;
         }
         case "REPLCONF":
-          return "+OK\r\n";
+          outputWriter.write("+OK\r\n");
+          outputWriter.flush();
+          break;
         case "PSYNC": {
-          if(role.equals("master")) {
-            String replid = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
-            return simpleString("FULLRESYNC " + replid + " 0");
+          String inputReplid = line[1];
+          String inputOffset = line[2];
+          if (role.equals("master")) {
+            if (inputReplid.equals("?") && inputOffset.equals("-1")) {
+              String replid = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
+              outputWriter.write(simpleString("FULLRESYNC " + replid + " 0"));
+              outputWriter.write(("$" + emptyRDB.length + "\r\n"));
+              outputWriter.flush();
+              outputStream.write(emptyRDB);
+              outputStream.flush();
+              break;
+            }
           }
         }
         default:
-          return simpleError("ERR: Command " + command.toUpperCase() + " not found");
+          outputWriter.write(simpleError("ERR: Command " + command.toUpperCase() + " not found"));
+          outputWriter.flush();
+          break;
       }
     }
   }
