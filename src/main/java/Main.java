@@ -60,8 +60,8 @@ public class Main {
                   while (true) {
                     try {
                       String[] line = readLineFromInputStream(inputStream);
-                      System.out.println("a " + String.join(" ", line));
-                      parseCommand(inputStream, outputStream, line, new BooleanWrapper(false), null);
+                      parseCommand(inputStream, outputStream, line, new BooleanWrapper(false), null, false);
+                      masterReplOffset += bulkStringArray(line).length();
                     } catch (EOFException e) {
                       break;
                     }
@@ -100,7 +100,7 @@ public class Main {
       while (true) {
         try {
           String[] line = readLineFromInputStream(inputStream);
-          parseCommand(inputStream, outputStream, line, transactionQueued, transaction);
+          parseCommand(inputStream, outputStream, line, transactionQueued, transaction, true);
         } catch (EOFException e) {
           break;
         }
@@ -154,7 +154,7 @@ public class Main {
   }
 
   static void parseCommand(InputStream inputStream, OutputStream outputStream, String[] line,
-      BooleanWrapper transactionQueued, ArrayList<String[]> transaction)
+      BooleanWrapper transactionQueued, ArrayList<String[]> transaction, boolean writeReplies)
       throws InterruptedException, IOException {
     String command = line[0];
     if (transactionQueued.value) {
@@ -164,32 +164,40 @@ public class Main {
         outputStream.write(("*" + commandReturns.length + "\r\n").getBytes());
         outputStream.flush();
         for (int i = 0; i < transaction.size(); i++) {
-          parseCommand(inputStream, outputStream, transaction.get(i), new BooleanWrapper(false), null);
+          parseCommand(inputStream, outputStream, transaction.get(i), new BooleanWrapper(false), null, writeReplies);
         }
         outputStream.flush();
       } else if (command.equalsIgnoreCase("DISCARD")) {
         transaction.clear();
         transactionQueued.value = false;
-        outputStream.write("+OK\r\n".getBytes());
-        outputStream.flush();
+        if (writeReplies) {
+          outputStream.write("+OK\r\n".getBytes());
+          outputStream.flush();
+        }
         return;
       } else {
         transaction.add(line);
-        outputStream.write(simpleString("QUEUED").getBytes());
-        outputStream.flush();
+        if (writeReplies) {
+          outputStream.write(simpleString("QUEUED").getBytes());
+          outputStream.flush();
+        }
         return;
       }
     } else {
       switch (command.toUpperCase()) {
         case "PING": {
-          outputStream.write("+PONG\r\n".getBytes());
-          outputStream.flush();
+          if (writeReplies) {
+            outputStream.write("+PONG\r\n".getBytes());
+            outputStream.flush();
+          }
           break;
         }
         case "ECHO": {
           String toEcho = line[1];
-          outputStream.write(("$" + toEcho.length() + "\r\n" + toEcho + "\r\n").getBytes());
-          outputStream.flush();
+          if (writeReplies) {
+            outputStream.write(("$" + toEcho.length() + "\r\n" + toEcho + "\r\n").getBytes());
+            outputStream.flush();
+          }
           break;
         }
         case "SET": {
@@ -203,8 +211,10 @@ public class Main {
               storeWithExpiry(key, new StoredString(value), expiry);
             }
           }
-          outputStream.write("+OK\r\n".getBytes());
-          outputStream.flush();
+          if (writeReplies) {
+            outputStream.write("+OK\r\n".getBytes());
+            outputStream.flush();
+          }
 
           for (OutputStream replicaOutputStream : replicaOutputStreams) {
             replicaOutputStream.write(bulkStringArray(line).getBytes());
@@ -214,25 +224,30 @@ public class Main {
         case "GET": {
           String key = line[1];
           StoredValue value = storedData.get(key);
-          if (value == null) {
-            outputStream.write("$-1\r\n".getBytes());
-          } else if (value instanceof StoredString) {
-            outputStream.write(((StoredString) value).getOutput().getBytes());
-          } else {
-            outputStream.write("$-1\r\n".getBytes());
+          if (writeReplies) {
+            if (value == null) {
+              outputStream.write("$-1\r\n".getBytes());
+            } else if (value instanceof StoredString) {
+              outputStream.write(((StoredString) value).getOutput().getBytes());
+            } else {
+              outputStream.write("$-1\r\n".getBytes());
+            }
+            outputStream.flush();
           }
-          outputStream.flush();
           break;
         }
         case "TYPE": {
           String key = line[1];
           StoredValue value = storedData.get(key);
-          if (value == null) {
-            outputStream.write("+none\r\n".getBytes());
-          } else {
-            outputStream.write(simpleString(value.type).getBytes());
+          if (writeReplies) {
+            if (value == null) {
+              outputStream.write("+none\r\n".getBytes());
+            } else {
+              outputStream.write(simpleString(value.type).getBytes());
+            }
+            outputStream.flush();
           }
-          outputStream.flush();
+
           break;
         }
         case "XADD": {
@@ -251,8 +266,10 @@ public class Main {
               addedEntries.put(line[i], line[i + 1]);
             }
             String returnId = stream.addEntries(id, addedEntries);
-            outputStream.write(bulkString(returnId).getBytes());
-            outputStream.flush();
+            if (writeReplies) {
+              outputStream.write(bulkString(returnId).getBytes());
+              outputStream.flush();
+            }
           } catch (RedisException e) {
             outputStream.write(simpleError(e.getMessage()).getBytes());
             outputStream.flush();
@@ -264,8 +281,10 @@ public class Main {
           StoredStream stream = (StoredStream) storedData.get(key);
           ArrayList<StreamEntry> range = stream.getRange(line[2], line[3]);
           if (range.size() == 0) {
-            outputStream.write("$-1\r\n".getBytes());
-            outputStream.flush();
+            if (writeReplies) {
+              outputStream.write("$-1\r\n".getBytes());
+              outputStream.flush();
+            }
             break;
           }
           String returnString = "*" + range.size() + "\r\n";
@@ -278,8 +297,10 @@ public class Main {
               returnString += bulkString(entry.values.get(entryKey));
             }
           }
-          outputStream.write(returnString.getBytes());
-          outputStream.flush();
+          if (writeReplies) {
+            outputStream.write(returnString.getBytes());
+            outputStream.flush();
+          }
           break;
         }
         case "XREAD": {
@@ -333,8 +354,10 @@ public class Main {
             }
 
             if (range.size() == 0) {
-              outputStream.write("$-1\r\n".getBytes());
-              outputStream.flush();
+              if (writeReplies) {
+                outputStream.write("$-1\r\n".getBytes());
+                outputStream.flush();
+              }
               break;
             }
             returnString += "*" + range.size() + "\r\n";
@@ -349,8 +372,10 @@ public class Main {
               }
             }
           }
-          outputStream.write(returnString.getBytes());
-          outputStream.flush();
+          if (writeReplies) {
+            outputStream.write(returnString.getBytes());
+            outputStream.flush();
+          }
           break;
         }
         case "INCR": {
@@ -358,13 +383,17 @@ public class Main {
           StoredValue storedValue = storedData.get(key);
           if (storedValue == null) {
             storedData.put(key, new StoredString("1"));
-            outputStream.write(":1\r\n".getBytes());
+            if (writeReplies) {
+              outputStream.write(":1\r\n".getBytes());
+            }
           } else if (storedValue instanceof StoredString) {
             try {
               StoredString storedString = (StoredString) storedValue;
               int newVal = Integer.parseInt(storedString.value) + 1;
               storedString.value = String.valueOf(newVal);
-              outputStream.write((":" + newVal + "\r\n").getBytes());
+              if (writeReplies) {
+                outputStream.write((":" + newVal + "\r\n").getBytes());
+              }
             } catch (NumberFormatException e) {
               outputStream.write(simpleError("ERR value is not an integer or out of range").getBytes());
             }
@@ -377,8 +406,10 @@ public class Main {
         case "MULTI": {
           transactionQueued.value = true;
           transaction.clear();
-          outputStream.write("+OK\r\n".getBytes());
-          outputStream.flush();
+          if (writeReplies) {
+            outputStream.write("+OK\r\n".getBytes());
+            outputStream.flush();
+          }
           break;
         }
         case "EXEC": { // Won't ever be here if transactionQueued == true
@@ -419,8 +450,9 @@ public class Main {
             switch (line[1].toUpperCase()) {
               case "GETACK":
                 if (line[2].equals("*")) {
-                  int offset = 0;
-                  outputStream.write(("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n" + offset + "\r\n").getBytes());
+                  outputStream
+                      .write(("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n" + bulkString(Integer.toString(masterReplOffset)))
+                          .getBytes());
                   outputStream.flush();
                 }
                 break;
