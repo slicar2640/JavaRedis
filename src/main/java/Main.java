@@ -1,8 +1,6 @@
-import java.io.BufferedReader;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -42,26 +40,31 @@ public class Main {
               Socket master = new Socket(hostAddr, portAddr);
               OutputStream outputStream = master.getOutputStream();
               InputStream inputStream = master.getInputStream();
-              BufferedReader inputReader = new BufferedReader(new InputStreamReader(inputStream));
               outputStream.write("*1\r\n$4\r\nPING\r\n".getBytes());
               outputStream.flush();
-              inputReader.readLine();
+              readSimpleString(inputStream); // OK;
               outputStream
                   .write(("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n" + port + "\r\n").getBytes());
               outputStream.flush();
-              inputReader.readLine();
+              readSimpleString(inputStream); // OK
               outputStream.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n".getBytes());
               outputStream.flush();
-              inputReader.readLine();
+              readSimpleString(inputStream); // OK
               outputStream.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n".getBytes());
               outputStream.flush();
-              inputReader.readLine();
+              readSimpleString(inputStream); // FULLRESYNC ...
+              readBulkString(inputStream, false); // RDB file
 
               new Thread(() -> {
                 try {
                   while (true) {
-                    String[] line = readLineFromInputStream(inputStream);
-                    parseCommand(inputStream, outputStream, line, new BooleanWrapper(false), null);
+                    try {
+                      String[] line = readLineFromInputStream(inputStream);
+                      System.out.println("a " + String.join(" ", line));
+                      parseCommand(inputStream, outputStream, line, new BooleanWrapper(false), null);
+                    } catch (EOFException e) {
+                      break;
+                    }
                   }
                 } catch (Exception e) {
                   System.out.println("Replication error: " + e.toString());
@@ -113,7 +116,7 @@ public class Main {
     String[] line;
     int firstByte = inputStream.read();
     if (firstByte == -1)
-      throw new EOFException(); // client closed connection
+      throw new EOFException("break now"); // client closed connection
     if ((char) firstByte == '*') {
       int length = 0;
       int digit = 0;
@@ -123,27 +126,15 @@ public class Main {
       inputStream.read(); // \n
       line = new String[length];
     } else {
+      System.out.println("Byte: " + firstByte + ", char: " + (char) firstByte);
       throw new IOException("Doesn't start with *");
     }
 
     for (int i = 0; i < line.length; i++) {
-      char thisChar = (char) inputStream.read();
-      if (thisChar == '$') {
-        int length = 0;
-        int digit = 0;
-        while ((digit = inputStream.read()) != '\r') {
-          length = length * 10 + (digit - '0');
-        }
-
-        inputStream.read(); // \n
-        byte[] stringBytes = new byte[length];
-        inputStream.read(stringBytes, 0, length);
-        line[i] = new String(stringBytes);
-        inputStream.read();
-        inputStream.read(); // \r\n
-      } else {
-        System.out.println("thisChar: " + thisChar);
-        throw new IOException("Not bulk string, probably should deal with this");
+      try {
+        line[i] = readBulkString(inputStream, true);
+      } catch (IllegalArgumentException e) {
+        throw new IOException("Not bulk string, probably should deal with this (" + e.getMessage() + ")");
       }
     }
     return line;
@@ -424,8 +415,24 @@ public class Main {
           }
         }
         case "REPLCONF":
-          outputStream.write("+OK\r\n".getBytes());
-          outputStream.flush();
+          if (line.length > 1) {
+            switch (line[1].toUpperCase()) {
+              case "GETACK":
+                if (line[2].equals("*")) {
+                  int offset = 0;
+                  outputStream.write(("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n" + offset + "\r\n").getBytes());
+                  outputStream.flush();
+                }
+                break;
+              default:
+                outputStream.write("+OK\r\n".getBytes());
+                outputStream.flush();
+                break;
+            }
+          } else {
+            outputStream.write("+OK\r\n".getBytes());
+            outputStream.flush();
+          }
           break;
         case "PSYNC": {
           String inputReplid = line[1];
@@ -470,5 +477,52 @@ public class Main {
       returnString += bulkString(s);
     }
     return returnString;
+  }
+
+  static String readSimpleString(InputStream inputStream) {
+    String s = "";
+    try {
+      char firstChar = (char) inputStream.read();
+      if (firstChar == '+') {
+        char nextChar;
+        while ((nextChar = (char) inputStream.read()) != '\r') {
+          s += nextChar;
+        }
+      } else {
+        System.out.println(firstChar);
+        throw new IllegalArgumentException("Simple string does not start with + (" + firstChar + ")");
+      }
+      inputStream.read(); // \n
+      return s;
+    } catch (IOException e) {
+      return s;
+    }
+  }
+
+  static String readBulkString(InputStream inputStream, boolean readEndBytes) {
+    String s = "";
+    try {
+      char firstChar = (char) inputStream.read();
+      if (firstChar == '$') {
+        int length = 0;
+        int digit = 0;
+        while ((digit = inputStream.read()) != '\r') {
+          length = length * 10 + (digit - '0');
+        }
+
+        inputStream.read(); // \n
+        byte[] stringBytes = new byte[length];
+        inputStream.read(stringBytes, 0, length);
+        if (readEndBytes) {
+          inputStream.read(); // \r
+          inputStream.read(); // \n
+        }
+        return new String(stringBytes);
+      } else {
+        throw new IllegalArgumentException("Bulk string does not start with $ (" + firstChar + ")");
+      }
+    } catch (IOException e) {
+      return s;
+    }
   }
 }
