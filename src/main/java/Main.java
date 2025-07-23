@@ -1,5 +1,4 @@
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -22,6 +21,7 @@ public class Main {
   static int masterReplOffset = 0;
   static final byte[] emptyRDB = Base64.getDecoder().decode(
       "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==");
+  static ArrayList<OutputStream> replicaOutputStreams = new ArrayList<>();
 
   public static void main(String[] args) {
     ServerSocket serverSocket = null;
@@ -40,20 +40,21 @@ public class Main {
               String hostAddr = address[0];
               int portAddr = Integer.valueOf(address[1]);
               Socket master = new Socket(hostAddr, portAddr);
-              BufferedWriter outputWriter = new BufferedWriter(new OutputStreamWriter(master.getOutputStream()));
+              OutputStream outputStream = master.getOutputStream();
               BufferedReader inputReader = new BufferedReader(new InputStreamReader(master.getInputStream()));
-              outputWriter.write("*1\r\n$4\r\nPING\r\n");
-              outputWriter.flush();
+              outputStream.write("*1\r\n$4\r\nPING\r\n".getBytes());
+              outputStream.flush();
               inputReader.readLine();
-              outputWriter
-                  .write("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n" + port + "\r\n");
-              outputWriter.flush();
+              outputStream
+                  .write(("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n" + port + "\r\n").getBytes());
+              outputStream.flush();
               inputReader.readLine();
-              outputWriter.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n");
-              outputWriter.flush();
+              outputStream.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n".getBytes());
+              outputStream.flush();
               inputReader.readLine();
-              outputWriter.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n");
-              outputWriter.flush();
+              outputStream.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n".getBytes());
+              outputStream.flush();
+              inputReader.readLine();
               i++;
               break;
           }
@@ -142,41 +143,40 @@ public class Main {
   static void parseCommand(InputStream inputStream, OutputStream outputStream, String[] line,
       BooleanWrapper transactionQueued, ArrayList<String[]> transaction)
       throws InterruptedException, IOException {
-        BufferedWriter outputWriter = new BufferedWriter(new OutputStreamWriter(outputStream));
     String command = line[0];
     if (transactionQueued.value) {
       if (command.equalsIgnoreCase("EXEC")) {
         transactionQueued.value = false;
         String[] commandReturns = new String[transaction.size()];
-        outputWriter.write("*" + commandReturns.length + "\r\n");
-        outputWriter.flush();
+        outputStream.write(("*" + commandReturns.length + "\r\n").getBytes());
+        outputStream.flush();
         for (int i = 0; i < transaction.size(); i++) {
           parseCommand(inputStream, outputStream, transaction.get(i), new BooleanWrapper(false), null);
         }
-        outputWriter.flush();
+        outputStream.flush();
       } else if (command.equalsIgnoreCase("DISCARD")) {
         transaction.clear();
         transactionQueued.value = false;
-        outputWriter.write("+OK\r\n");
-        outputWriter.flush();
+        outputStream.write("+OK\r\n".getBytes());
+        outputStream.flush();
         return;
       } else {
         transaction.add(line);
-        outputWriter.write(simpleString("QUEUED"));
-        outputWriter.flush();
+        outputStream.write(simpleString("QUEUED").getBytes());
+        outputStream.flush();
         return;
       }
     } else {
       switch (command.toUpperCase()) {
         case "PING": {
-          outputWriter.write("+PONG\r\n");
-          outputWriter.flush();
+          outputStream.write("+PONG\r\n".getBytes());
+          outputStream.flush();
           break;
         }
         case "ECHO": {
           String toEcho = line[1];
-          outputWriter.write("$" + toEcho.length() + "\r\n" + toEcho + "\r\n");
-          outputWriter.flush();
+          outputStream.write(("$" + toEcho.length() + "\r\n" + toEcho + "\r\n").getBytes());
+          outputStream.flush();
           break;
         }
         case "SET": {
@@ -190,32 +190,36 @@ public class Main {
               storeWithExpiry(key, new StoredString(value), expiry);
             }
           }
-          outputWriter.write("+OK\r\n");
-          outputWriter.flush();
+          outputStream.write("+OK\r\n".getBytes());
+          outputStream.flush();
+
+          for (OutputStream replicaOutputStream : replicaOutputStreams) {
+            replicaOutputStream.write(bulkStringArray(line).getBytes());
+          }
           break;
         }
         case "GET": {
           String key = line[1];
           StoredValue value = storedData.get(key);
           if (value == null) {
-            outputWriter.write("$-1\r\n");
+            outputStream.write("$-1\r\n".getBytes());
           } else if (value instanceof StoredString) {
-            outputWriter.write(((StoredString) value).getOutput());
+            outputStream.write(((StoredString) value).getOutput().getBytes());
           } else {
-            outputWriter.write("$-1\r\n");
+            outputStream.write("$-1\r\n".getBytes());
           }
-          outputWriter.flush();
+          outputStream.flush();
           break;
         }
         case "TYPE": {
           String key = line[1];
           StoredValue value = storedData.get(key);
           if (value == null) {
-            outputWriter.write("+none\r\n");
+            outputStream.write("+none\r\n".getBytes());
           } else {
-            outputWriter.write(simpleString(value.type));
+            outputStream.write(simpleString(value.type).getBytes());
           }
-          outputWriter.flush();
+          outputStream.flush();
           break;
         }
         case "XADD": {
@@ -234,22 +238,21 @@ public class Main {
               addedEntries.put(line[i], line[i + 1]);
             }
             String returnId = stream.addEntries(id, addedEntries);
-            outputWriter.write(bulkString(returnId));
-            outputWriter.flush();
-            break;
+            outputStream.write(bulkString(returnId).getBytes());
+            outputStream.flush();
           } catch (RedisException e) {
-            outputWriter.write(simpleError(e.getMessage()));
-            outputWriter.flush();
-            break;
+            outputStream.write(simpleError(e.getMessage()).getBytes());
+            outputStream.flush();
           }
+          break;
         }
         case "XRANGE": {
           String key = line[1];
           StoredStream stream = (StoredStream) storedData.get(key);
           ArrayList<StreamEntry> range = stream.getRange(line[2], line[3]);
           if (range.size() == 0) {
-            outputWriter.write("$-1\r\n");
-            outputWriter.flush();
+            outputStream.write("$-1\r\n".getBytes());
+            outputStream.flush();
             break;
           }
           String returnString = "*" + range.size() + "\r\n";
@@ -262,8 +265,8 @@ public class Main {
               returnString += bulkString(entry.values.get(entryKey));
             }
           }
-          outputWriter.write(returnString);
-          outputWriter.flush();
+          outputStream.write(returnString.getBytes());
+          outputStream.flush();
           break;
         }
         case "XREAD": {
@@ -317,8 +320,8 @@ public class Main {
             }
 
             if (range.size() == 0) {
-              outputWriter.write("$-1\r\n");
-              outputWriter.flush();
+              outputStream.write("$-1\r\n".getBytes());
+              outputStream.flush();
               break;
             }
             returnString += "*" + range.size() + "\r\n";
@@ -333,8 +336,8 @@ public class Main {
               }
             }
           }
-          outputWriter.write(returnString);
-          outputWriter.flush();
+          outputStream.write(returnString.getBytes());
+          outputStream.flush();
           break;
         }
         case "INCR": {
@@ -342,41 +345,37 @@ public class Main {
           StoredValue storedValue = storedData.get(key);
           if (storedValue == null) {
             storedData.put(key, new StoredString("1"));
-            outputWriter.write(":1\r\n");
+            outputStream.write(":1\r\n".getBytes());
           } else if (storedValue instanceof StoredString) {
             try {
               StoredString storedString = (StoredString) storedValue;
               int newVal = Integer.parseInt(storedString.value) + 1;
               storedString.value = String.valueOf(newVal);
-              outputWriter.write(":" + newVal + "\r\n");
+              outputStream.write((":" + newVal + "\r\n").getBytes());
             } catch (NumberFormatException e) {
-              outputWriter.write(simpleError("ERR value is not an integer or out of range"));
-              outputWriter.flush();
-              break;
+              outputStream.write(simpleError("ERR value is not an integer or out of range").getBytes());
             }
           } else {
-            outputWriter.write(simpleError("Incremented value isn't a string"));
-            outputWriter.flush();
-            break;
+            outputStream.write(simpleError("Incremented value isn't a string").getBytes());
           }
-          outputWriter.flush();
+          outputStream.flush();
           break;
         }
         case "MULTI": {
           transactionQueued.value = true;
           transaction.clear();
-          outputWriter.write("+OK\r\n");
-          outputWriter.flush();
+          outputStream.write("+OK\r\n".getBytes());
+          outputStream.flush();
           break;
         }
         case "EXEC": { // Won't ever be here if transactionQueued == true
-          outputWriter.write(simpleError("ERR EXEC without MULTI"));
-          outputWriter.flush();
+          outputStream.write(simpleError("ERR EXEC without MULTI").getBytes());
+          outputStream.flush();
           break;
         }
         case "DISCARD": { // Won't ever be here if transactionQueued == true
-          outputWriter.write(simpleError("ERR DISCARD without MULTI"));
-          outputWriter.flush();
+          outputStream.write(simpleError("ERR DISCARD without MULTI").getBytes());
+          outputStream.flush();
           break;
         }
         case "INFO": {
@@ -392,20 +391,19 @@ public class Main {
                 returnString += "role:" + role;
                 returnString += "master_replid:" + masterReplid;
                 returnString += "master_repl_offset:" + masterReplOffset;
+                outputStream.write(bulkString(returnString).getBytes());
+                outputStream.flush();
                 break;
               default:
-                outputWriter.write(simpleError("ERR: Invalid section [" + section + "] for INFO command"));
-                outputWriter.flush();
+                outputStream.write(simpleError("ERR: Invalid section [" + section + "] for INFO command").getBytes());
+                outputStream.flush();
                 break;
             }
           }
-          outputWriter.write(bulkString(returnString));
-          outputWriter.flush();
-          break;
         }
         case "REPLCONF":
-          outputWriter.write("+OK\r\n");
-          outputWriter.flush();
+          outputStream.write("+OK\r\n".getBytes());
+          outputStream.flush();
           break;
         case "PSYNC": {
           String inputReplid = line[1];
@@ -413,18 +411,20 @@ public class Main {
           if (role.equals("master")) {
             if (inputReplid.equals("?") && inputOffset.equals("-1")) {
               String replid = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
-              outputWriter.write(simpleString("FULLRESYNC " + replid + " 0"));
-              outputWriter.write(("$" + emptyRDB.length + "\r\n"));
-              outputWriter.flush();
+              outputStream.write(simpleString("FULLRESYNC " + replid + " 0").getBytes());
+              outputStream.flush();
+              outputStream.write(("$" + emptyRDB.length + "\r\n").getBytes());
+              outputStream.flush();
               outputStream.write(emptyRDB);
               outputStream.flush();
-              break;
+              replicaOutputStreams.add(outputStream);
             }
           }
+          break;
         }
         default:
-          outputWriter.write(simpleError("ERR: Command " + command.toUpperCase() + " not found"));
-          outputWriter.flush();
+          outputStream.write(simpleError("ERR: Command " + command.toUpperCase() + " not found").getBytes());
+          outputStream.flush();
           break;
       }
     }
@@ -440,5 +440,13 @@ public class Main {
 
   static String simpleError(String input) {
     return "-" + input + "\r\n";
+  }
+
+  static String bulkStringArray(String[] input) {
+    String returnString = "*" + input.length + "\r\n";
+    for (String s : input) {
+      returnString += bulkString(s);
+    }
+    return returnString;
   }
 }
