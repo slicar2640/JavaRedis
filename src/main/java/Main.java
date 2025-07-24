@@ -9,6 +9,8 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 public class Main {
   static HashMap<String, StoredValue> storedData = new HashMap<>();
@@ -19,7 +21,7 @@ public class Main {
   static int masterReplOffset = 0;
   static final byte[] emptyRDB = Base64.getDecoder().decode(
       "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==");
-  static ArrayList<OutputStream> replicaOutputStreams = new ArrayList<>();
+  static ArrayList<Socket> replicaSockets = new ArrayList<>();
 
   public static void main(String[] args) {
     ServerSocket serverSocket = null;
@@ -60,7 +62,7 @@ public class Main {
                   while (true) {
                     try {
                       String[] line = readLineFromInputStream(inputStream);
-                      parseCommand(inputStream, outputStream, line, new BooleanWrapper(false), null, false);
+                      parseCommand(master, line, new BooleanWrapper(false), null, false);
                       masterReplOffset += bulkStringArray(line).length();
                     } catch (EOFException e) {
                       break;
@@ -92,7 +94,6 @@ public class Main {
 
   static void handleClient(Socket clientSocket) {
     try (clientSocket; // automatically closes socket at the end
-        OutputStream outputStream = clientSocket.getOutputStream();
         InputStream inputStream = clientSocket.getInputStream();) {
       System.out.println("New client connected");
       ArrayList<String[]> transaction = new ArrayList<>();
@@ -100,7 +101,7 @@ public class Main {
       while (true) {
         try {
           String[] line = readLineFromInputStream(inputStream);
-          parseCommand(inputStream, outputStream, line, transactionQueued, transaction, true);
+          parseCommand(clientSocket, line, transactionQueued, transaction, true);
         } catch (EOFException e) {
           break;
         }
@@ -114,16 +115,11 @@ public class Main {
 
   static String[] readLineFromInputStream(InputStream inputStream) throws EOFException, IOException {
     String[] line;
-    int firstByte = inputStream.read();
+    int firstByte = readByte(inputStream);
     if (firstByte == -1)
       throw new EOFException("break now"); // client closed connection
     if ((char) firstByte == '*') {
-      int length = 0;
-      int digit = 0;
-      while ((digit = inputStream.read()) != '\r') {
-        length = length * 10 + (digit - '0');
-      }
-      inputStream.read(); // \n
+      int length = readInteger(inputStream);
       line = new String[length];
     } else {
       System.out.println("Byte: " + firstByte + ", char: " + (char) firstByte);
@@ -153,9 +149,11 @@ public class Main {
         expiryMillis);
   }
 
-  static void parseCommand(InputStream inputStream, OutputStream outputStream, String[] line,
+  static void parseCommand(Socket socket, String[] line,
       BooleanWrapper transactionQueued, ArrayList<String[]> transaction, boolean writeReplies)
       throws InterruptedException, IOException {
+    OutputStream outputStream = socket.getOutputStream();
+    InputStream inputStream = socket.getInputStream();
     String command = line[0];
     if (transactionQueued.value) {
       if (command.equalsIgnoreCase("EXEC")) {
@@ -164,7 +162,7 @@ public class Main {
         outputStream.write(("*" + commandReturns.length + "\r\n").getBytes());
         outputStream.flush();
         for (int i = 0; i < transaction.size(); i++) {
-          parseCommand(inputStream, outputStream, transaction.get(i), new BooleanWrapper(false), null, writeReplies);
+          parseCommand(socket, transaction.get(i), new BooleanWrapper(false), null, writeReplies);
         }
         outputStream.flush();
       } else if (command.equalsIgnoreCase("DISCARD")) {
@@ -216,9 +214,11 @@ public class Main {
             outputStream.flush();
           }
 
-          for (OutputStream replicaOutputStream : replicaOutputStreams) {
-            replicaOutputStream.write(bulkStringArray(line).getBytes());
+          String replicationMsg = bulkStringArray(line);
+          for (Socket replicaSocket : replicaSockets) {
+            replicaSocket.getOutputStream().write(replicationMsg.getBytes());
           }
+          masterReplOffset += replicationMsg.getBytes().length;
           break;
         }
         case "GET": {
@@ -478,46 +478,59 @@ public class Main {
               outputStream.flush();
               outputStream.write(emptyRDB);
               outputStream.flush();
-              replicaOutputStreams.add(outputStream);
+              replicaSockets.add(socket);
             }
           }
           break;
         }
         case "WAIT": {
           if (role.equals("master")) {
-            int numReplicas = Integer.parseInt(line[1]);
-            // int waitTime = Integer.parseInt(line[2]);
-            // int numResponded = 0;
-            // if (waitTime > 0) {
-            //   Timer timer = new Timer();
-            //   timer.schedule(
-            //       new TimerTask() {
-            //         @Override
-            //         public void run() {
-            //           try {
-            //             outputStream.write(redisInteger(numResponded).getBytes());
-            //             outputStream.flush();
-            //           } catch (IOException e) {
-            //             System.out.println(e.toString());
-            //           }
-            //         }
-            //       },
-            //       waitTime);
-            // }
-            // for (OutputStream stream : replicaOutputStreams) {
-            //   numResponded++;
-            // }
-            outputStream.write(redisInteger(replicaOutputStreams.size()).getBytes());
+            int requestedReplicas = Integer.parseInt(line[1]);
+            long timeout = Long.parseLong(line[2]);
+
+            for (Socket replicaSocket : replicaSockets) {
+              OutputStream replicaOut = replicaSocket.getOutputStream();
+              replicaOut.write(bulkStringArray("REPLCONF", "GETACK", "*").getBytes());
+              replicaOut.flush();
+            }
+            System.out.println(masterReplOffset);
+
+            int acknowledged = 0;
+            long startTime = System.currentTimeMillis();
+            while (acknowledged < requestedReplicas && (System.currentTimeMillis() - startTime) < timeout) {
+              for (Socket replicaSocket : replicaSockets) {
+                if (acknowledged >= requestedReplicas)
+                  break;
+
+                InputStream replicaIn = replicaSocket.getInputStream();
+                replicaSocket.setSoTimeout(200);
+                String[] response = readLineFromInputStream(replicaIn);
+                if (response.length >= 3 &&
+                    response[0].equalsIgnoreCase("REPLCONF") &&
+                    response[1].equalsIgnoreCase("ACK")) {
+
+                  int replicaOffset = Integer.parseInt(response[2]);
+                  System.out.println(replicaOffset + " " + masterReplOffset);
+                  if (replicaOffset >= masterReplOffset) {
+                    acknowledged++;
+                  }
+                }
+              }
+              Thread.sleep(10); // small pause to avoid busy loop
+            }
+            outputStream.write(redisInteger(acknowledged).getBytes());
             outputStream.flush();
           }
           break;
         }
+
         default:
           outputStream.write(simpleError("ERR: Command " + command.toUpperCase() + " not found").getBytes());
           outputStream.flush();
           break;
       }
     }
+
   }
 
   static String simpleString(String input) {
@@ -532,7 +545,7 @@ public class Main {
     return "-" + input + "\r\n";
   }
 
-  static String bulkStringArray(String[] input) {
+  static String bulkStringArray(String... input) {
     String returnString = "*" + input.length + "\r\n";
     for (String s : input) {
       returnString += bulkString(s);
@@ -547,47 +560,107 @@ public class Main {
   static String readSimpleString(InputStream inputStream) {
     String s = "";
     try {
-      char firstChar = (char) inputStream.read();
+      char firstChar = (char) readByte(inputStream);
       if (firstChar == '+') {
         char nextChar;
-        while ((nextChar = (char) inputStream.read()) != '\r') {
+        while ((nextChar = (char) readByte(inputStream)) != '\n') {
           s += nextChar;
         }
       } else {
         System.out.println(firstChar);
         throw new IllegalArgumentException("Simple string does not start with + (" + firstChar + ")");
       }
-      inputStream.read(); // \n
       return s;
     } catch (IOException e) {
       return s;
     }
   }
 
-  static String readBulkString(InputStream inputStream, boolean readEndBytes) {
-    String s = "";
-    try {
-      char firstChar = (char) inputStream.read();
-      if (firstChar == '$') {
-        int length = 0;
-        int digit = 0;
-        while ((digit = inputStream.read()) != '\r') {
-          length = length * 10 + (digit - '0');
-        }
-
-        inputStream.read(); // \n
-        byte[] stringBytes = new byte[length];
-        inputStream.read(stringBytes, 0, length);
-        if (readEndBytes) {
-          inputStream.read(); // \r
-          inputStream.read(); // \n
-        }
-        return new String(stringBytes);
-      } else {
-        throw new IllegalArgumentException("Bulk string does not start with $ (" + firstChar + ")");
+  static String readBulkString(InputStream inputStream, boolean readEndBytes) throws IOException {
+    char firstChar = (char) readByte(inputStream);
+    if (firstChar == '$') {
+      int length = 0;
+      int digit = 0;
+      while ((digit = readByte(inputStream)) != '\r') {
+        length = length * 10 + (digit - '0');
       }
-    } catch (IOException e) {
-      return s;
+      readByte(inputStream); // \n
+      byte[] stringBytes = new byte[length];
+      readBytes(inputStream, stringBytes);
+      if (readEndBytes) {
+        readByte(inputStream); // \r
+        readByte(inputStream); // \n
+      }
+      return new String(stringBytes);
+    } else {
+      throw new IllegalArgumentException("Bulk string does not start with $ (" + firstChar + ")");
     }
+  }
+
+  static String[] readBulkStringArray(InputStream in) throws IOException {
+    int b = in.read();
+    if (b != '*')
+      throw new IOException("Array does not start with * (" + (char) b + ")");
+    int count = readInteger(in);
+    if (count < 0)
+      throw new IOException("Invalid array length: " + count);
+
+    String[] result = new String[count];
+    for (int i = 0; i < count; i++) {
+      b = in.read();
+      if (b != '$')
+        throw new IOException("Bulk string does not start with $ (" + (char) b + ")");
+      int len = readInteger(in);
+      if (len < 0)
+        throw new IOException("Invalid bulk string length: " + len);
+
+      byte[] buf = new byte[len];
+      int readBytes = 0;
+      while (readBytes < len) {
+        int r = in.read(buf, readBytes, len - readBytes);
+        if (r == -1)
+          throw new IOException("Unexpected end of stream");
+        readBytes += r;
+      }
+      result[i] = new String(buf, "UTF-8");
+
+      int cr = in.read();
+      int lf = in.read();
+      if (cr != '\r' || lf != '\n')
+        throw new IOException("Expected CRLF after bulk string");
+    }
+
+    return result;
+  }
+
+  static int readInteger(InputStream in) throws IOException {
+    StringBuilder sb = new StringBuilder();
+    int b;
+    while ((b = in.read()) != -1) {
+      if (b == '\r') {
+        int lf = in.read();
+        if (lf == '\n')
+          break;
+        else
+          throw new IOException("Expected LF after CR in integer");
+      }
+      if (b < '0' || b > '9')
+        throw new IOException("Invalid character in integer: " + (char) b);
+      sb.append((char) b);
+    }
+    if (b == -1)
+      throw new IOException("Unexpected end of stream while reading integer");
+    return Integer.parseInt(sb.toString());
+  }
+
+  static int readByte(InputStream inputStream) throws IOException {
+    int b = inputStream.read();
+    // System.out.println(b + " | " + (char) b);
+    return b;
+  }
+
+  static void readBytes(InputStream inputStream, byte[] byteArr) throws IOException {
+    inputStream.read(byteArr);
+    // System.out.println(new String(byteArr));
   }
 }
