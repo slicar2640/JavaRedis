@@ -33,4 +33,12 @@ class StoredList extends StoredValue {
   public String popFirst() {
     return list.remove(0);
   }
+
+  public String[] popFirst(int count) {
+    String[] popped = new String[count];
+    for(int i = 0; i < count; i++) {
+      popped[i] = list.remove(0);
+    }
+    return popped;
+  }
 }

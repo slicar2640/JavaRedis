@@ -330,7 +330,12 @@ public class Main {
             if (storedList.size() == 0) {
               return "$-1\r\n";
             }
-            return bulkString(storedList.popFirst());
+            if(line.length == 2) {
+              return bulkString(storedList.popFirst());
+            } else {
+              int count = Integer.parseInt(line[2]);
+              return bulkStringArray(storedList.popFirst(count));
+            }
           } else {
             return "$-1\r\n";
           }
