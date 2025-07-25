@@ -116,7 +116,7 @@ public class Main {
           returnString += commandReturns[i];
         }
         return returnString;
-      } else if(command.equalsIgnoreCase("DISCARD")) {
+      } else if (command.equalsIgnoreCase("DISCARD")) {
         transaction.clear();
         transactionQueued.value = false;
         return "+OK\r\n";
@@ -305,12 +305,15 @@ public class Main {
         }
         case "RPUSH": {
           String key = line[1];
-          String element = line[2];
-          if(!storedData.containsKey(key)) {
+          if (!storedData.containsKey(key)) {
             storedData.put(key, new StoredList());
           }
-          StoredList storedList = (StoredList)storedData.get(key);
-          return redisInteger(storedList.push(element));
+          StoredList storedList = (StoredList) storedData.get(key);
+          for (int i = 2; i < line.length; i++) {
+            String element = line[i];
+            storedList.push(element);
+          }
+          return redisInteger(storedList.size());
         }
         default:
           return simpleError("ERR: Command " + command.toUpperCase() + " not found");
