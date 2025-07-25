@@ -320,4 +320,8 @@ public class Main {
   static String simpleError(String input) {
     return "-" + input + "\r\n";
   }
+
+  static String redisInteger(int input) {
+    return ":" + Integer.toString(input) + "\r\n";
+  }
 }
