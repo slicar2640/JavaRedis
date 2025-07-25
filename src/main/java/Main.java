@@ -303,6 +303,15 @@ public class Main {
         case "DISCARD": { // Won't ever be here if transactionQueued == true
           return simpleError("ERR DISCARD without MULTI");
         }
+        case "RPUSH": {
+          String key = line[1];
+          String element = line[2];
+          if(!storedData.containsKey(key)) {
+            storedData.put(key, new StoredList());
+          }
+          StoredList storedList = (StoredList)storedData.get(key);
+          return redisInteger(storedList.push(element));
+        }
         default:
           return simpleError("ERR: Command " + command.toUpperCase() + " not found");
       }
