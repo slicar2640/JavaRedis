@@ -306,12 +306,21 @@ public class Main {
           String key = line[1];
           int firstIndex = Integer.parseInt(line[2]);
           int secondIndex = Integer.parseInt(line[3]);
-          if(storedData.containsKey(key)) {
-            StoredList storedList = (StoredList)storedData.get(key);
+          if (storedData.containsKey(key)) {
+            StoredList storedList = (StoredList) storedData.get(key);
             ArrayList<String> subList = storedList.subList(firstIndex, secondIndex);
             return bulkStringArray(subList);
           } else {
             return "*0\r\n";
+          }
+        }
+        case "LLEN": {
+          String key = line[1];
+          if (storedData.containsKey(key)) {
+            StoredList storedList = (StoredList) storedData.get(key);
+            return redisInteger(storedList.size());
+          } else {
+            return ":0\r\n";
           }
         }
         default:
@@ -338,7 +347,7 @@ public class Main {
 
   static String bulkStringArray(String[] input) {
     String returnString = "*" + input.length + "\r\n";
-    for(String element : input) {
+    for (String element : input) {
       returnString += bulkString(element);
     }
     return returnString;
@@ -346,7 +355,7 @@ public class Main {
 
   static String bulkStringArray(ArrayList<String> input) {
     String returnString = "*" + input.size() + "\r\n";
-    for(String element : input) {
+    for (String element : input) {
       returnString += bulkString(element);
     }
     return returnString;
