@@ -323,6 +323,18 @@ public class Main {
             return ":0\r\n";
           }
         }
+        case "LPOP": {
+          String key = line[1];
+          if (storedData.containsKey(key)) {
+            StoredList storedList = (StoredList) storedData.get(key);
+            if (storedList.size() == 0) {
+              return "$-1\r\n";
+            }
+            return bulkString(storedList.popFirst());
+          } else {
+            return "$-1\r\n";
+          }
+        }
         default:
           return simpleError("ERR: Command " + command.toUpperCase() + " not found");
       }

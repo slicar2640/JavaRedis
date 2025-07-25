@@ -29,4 +29,8 @@ class StoredList extends StoredValue {
     System.out.println(firstIndex + " " + secondIndex);
     return new ArrayList<>(list.subList(firstIndex, secondIndex + 1));
   }
+
+  public String popFirst() {
+    return list.remove(0);
+  }
 }
