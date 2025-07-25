@@ -24,7 +24,6 @@ public class Main {
 
       while (true) {
         Socket clientSocket = serverSocket.accept();
-        System.out.println("a");
         new Thread(() -> handleClient(clientSocket)).start();
       }
 
@@ -46,43 +45,19 @@ public class Main {
         if (firstByte == -1)
           break; // client closed connection
         if ((char) firstByte == '*') {
-          int length = 0;
-          int digit = 0;
-          while ((digit = inputStream.read()) != '\r') {
-            length = length * 10 + (digit - '0');
-          }
-          inputStream.read(); // \n
+          int length = readInteger(inputStream);
           line = new String[length];
         } else {
           throw new Exception("Doesn't start with *");
         }
 
         for (int i = 0; i < line.length; i++) {
-          char thisChar = (char) inputStream.read();
-          if (thisChar == '$') {
-            int length = 0;
-            int digit = 0;
-            while ((digit = inputStream.read()) != '\r') {
-              length = length * 10 + (digit - '0');
-            }
-
-            inputStream.read(); // \n
-            byte[] stringBytes = new byte[length];
-            inputStream.read(stringBytes, 0, length);
-            line[i] = new String(stringBytes);
-            inputStream.read();
-            inputStream.read(); // \r\n
-          } else {
-            System.out.println("thisChar: " + thisChar);
-            throw new Exception("Not bulk string, probably should deal with this");
-          }
+          line[i] = readBulkString(inputStream);
         }
         String output = parseCommand(line, transactionQueued, transaction);
         outputWriter.write(output);
         outputWriter.flush();
       }
-    } catch (IOException e) {
-      System.out.println("IOException: " + e.getMessage());
     } catch (Exception e) {
       System.out.println(e.toString());
     }
@@ -315,6 +290,18 @@ public class Main {
           }
           return redisInteger(storedList.size());
         }
+        case "LRANGE": {
+          String key = line[1];
+          int firstIndex = Integer.parseInt(line[2]);
+          int secondIndex = Integer.parseInt(line[3]);
+          if(storedData.containsKey(key)) {
+            StoredList storedList = (StoredList)storedData.get(key);
+            ArrayList<String> subList = storedList.subList(firstIndex, secondIndex + 1);
+            return bulkStringArray(subList);
+          } else {
+            return "*0\r\n";
+          }
+        }
         default:
           return simpleError("ERR: Command " + command.toUpperCase() + " not found");
       }
@@ -335,5 +322,45 @@ public class Main {
 
   static String redisInteger(int input) {
     return ":" + Integer.toString(input) + "\r\n";
+  }
+
+  static String bulkStringArray(String[] input) {
+    String returnString = "*" + input.length + "\r\n";
+    for(String element : input) {
+      returnString += bulkString(element);
+    }
+    return returnString;
+  }
+
+  static String bulkStringArray(ArrayList<String> input) {
+    String returnString = "*" + input.size() + "\r\n";
+    for(String element : input) {
+      returnString += bulkString(element);
+    }
+    return returnString;
+  }
+
+  static int readInteger(InputStream inputStream) throws IOException {
+    int length = 0;
+    int digit = 0;
+    while ((digit = inputStream.read()) != '\r') {
+      length = length * 10 + (digit - '0');
+    }
+    inputStream.read(); // \n
+    return length;
+  }
+
+  static String readBulkString(InputStream inputStream) throws IOException, IllegalArgumentException {
+    char thisChar = (char) inputStream.read();
+    if (thisChar == '$') {
+      int length = readInteger(inputStream);
+      byte[] stringBytes = new byte[length];
+      inputStream.read(stringBytes, 0, length);
+      inputStream.read(); // \r
+      inputStream.read(); // \n
+      return new String(stringBytes);
+    } else {
+      throw new IllegalArgumentException("Bulk string does not start with $ (" + thisChar + ")");
+    }
   }
 }
