@@ -12,9 +12,17 @@ class StoredList extends StoredValue {
   }
 
   public ArrayList<String> subList(int firstIndex, int secondIndex) {
-    if(firstIndex >= list.size()) {
-      return new ArrayList<>();
+    if (firstIndex < 0) {
+      firstIndex += list.size();
     }
-    return new ArrayList<>(list.subList(firstIndex, Math.min(secondIndex, list.size())));
+    firstIndex = Math.clamp(firstIndex, 0, list.size() - 1);
+
+    if (secondIndex < 0) {
+      secondIndex += list.size();
+    }
+    secondIndex = Math.clamp(secondIndex, 0, list.size() - 1);
+
+    System.out.println(firstIndex + " " + secondIndex);
+    return new ArrayList<>(list.subList(firstIndex, secondIndex + 1));
   }
 }

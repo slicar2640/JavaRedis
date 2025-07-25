@@ -296,7 +296,7 @@ public class Main {
           int secondIndex = Integer.parseInt(line[3]);
           if(storedData.containsKey(key)) {
             StoredList storedList = (StoredList)storedData.get(key);
-            ArrayList<String> subList = storedList.subList(firstIndex, secondIndex + 1);
+            ArrayList<String> subList = storedList.subList(firstIndex, secondIndex);
             return bulkStringArray(subList);
           } else {
             return "*0\r\n";
