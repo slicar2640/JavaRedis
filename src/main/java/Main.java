@@ -290,6 +290,18 @@ public class Main {
           }
           return redisInteger(storedList.size());
         }
+        case "LPUSH": {
+          String key = line[1];
+          if (!storedData.containsKey(key)) {
+            storedData.put(key, new StoredList());
+          }
+          StoredList storedList = (StoredList) storedData.get(key);
+          for (int i = 2; i < line.length; i++) {
+            String element = line[i];
+            storedList.prepush(element);
+          }
+          return redisInteger(storedList.size());
+        }
         case "LRANGE": {
           String key = line[1];
           int firstIndex = Integer.parseInt(line[2]);

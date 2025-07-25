@@ -7,6 +7,10 @@ class StoredList extends StoredValue {
     list.add(el);
   }
 
+  public void prepush(String el) {
+    list.add(0, el);
+  }
+
   public int size() {
     return list.size();
   }
