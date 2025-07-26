@@ -26,7 +26,6 @@ class StoredList extends StoredValue {
     }
     secondIndex = Math.clamp(secondIndex, 0, list.size() - 1);
 
-    System.out.println(firstIndex + " " + secondIndex);
     return new ArrayList<>(list.subList(firstIndex, secondIndex + 1));
   }
 

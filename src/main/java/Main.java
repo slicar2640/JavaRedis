@@ -378,30 +378,33 @@ public class Main {
           return;
         }
         case "BLPOP": {
-          long blockTime = Long.parseLong(line[line.length - 1]);
-          if (blockTime == 0) {
-            // BLOCK 0: wait indefinitely for data
-            ArrayList<String> waiting = new ArrayList<String>(
-                Arrays.asList(Arrays.copyOfRange(line, 1, line.length - 1)));
-            while (waiting.size() > 0) {
-              ArrayList<String> toRemove = new ArrayList<>();
-              for (String listKey : waiting) {
-                if (storedData.containsKey(listKey)) {
-                  StoredList storedList = (StoredList) storedData.get(listKey);
-                  if(storedList.size() > 0) {
-                    Thread.sleep(20);
+          double blockTime = Double.parseDouble(line[line.length - 1]);
+          double startTime = System.currentTimeMillis();
+          // BLOCK 0: wait indefinitely for data
+          ArrayList<String> waiting = new ArrayList<String>(
+              Arrays.asList(Arrays.copyOfRange(line, 1, line.length - 1)));
+          while (waiting.size() > 0 && !(blockTime > 0 && System.currentTimeMillis() - startTime > blockTime * 1000)) {
+            ArrayList<String> toRemove = new ArrayList<>();
+            for (String listKey : waiting) {
+              if (storedData.containsKey(listKey)) {
+                StoredList storedList = (StoredList) storedData.get(listKey);
+                if (storedList.size() > 0) {
+                  Thread.sleep(11);
+                  if (storedList.size() > 0) {
                     outputWriter.write(bulkStringArray(listKey, storedList.popFirst()));
                     outputWriter.flush();
                     toRemove.add(listKey);
                   }
                 }
               }
-              waiting.removeAll(toRemove);
             }
-            return;
-          } else {
-            // Thread.sleep(blockTime);
+            waiting.removeAll(toRemove);
           }
+          if (waiting.size() > 0) {
+            outputWriter.write("$-1\r\n");
+            outputWriter.flush();
+          }
+          return;
         }
         default:
           outputWriter.write(simpleError("ERR: Command " + command.toUpperCase() + " not found"));
