@@ -389,7 +389,7 @@ public class Main {
               if (storedData.containsKey(listKey)) {
                 StoredList storedList = (StoredList) storedData.get(listKey);
                 if (storedList.size() > 0) {
-                  Thread.sleep(11);
+                  Thread.sleep(11); // This is so hacky but IDC I'm done
                   if (storedList.size() > 0) {
                     outputWriter.write(bulkStringArray(listKey, storedList.popFirst()));
                     outputWriter.flush();
