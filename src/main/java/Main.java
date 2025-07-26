@@ -389,7 +389,7 @@ public class Main {
                 if (storedData.containsKey(listKey)) {
                   StoredList storedList = (StoredList) storedData.get(listKey);
                   if(storedList.size() > 0) {
-                    System.out.println(listKey);
+                    Thread.sleep(20);
                     outputWriter.write(bulkStringArray(listKey, storedList.popFirst()));
                     outputWriter.flush();
                     toRemove.add(listKey);
