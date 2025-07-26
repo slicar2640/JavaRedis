@@ -5,6 +5,7 @@ import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -54,9 +55,7 @@ public class Main {
         for (int i = 0; i < line.length; i++) {
           line[i] = readBulkString(inputStream);
         }
-        String output = parseCommand(line, transactionQueued, transaction);
-        outputWriter.write(output);
-        outputWriter.flush();
+        parseCommand(line, transactionQueued, transaction, outputWriter);
       }
     } catch (Exception e) {
       System.out.println(e.toString());
@@ -76,37 +75,39 @@ public class Main {
         expiryMillis);
   }
 
-  static String parseCommand(String[] line, BooleanWrapper transactionQueued, ArrayList<String[]> transaction)
-      throws InterruptedException {
+  static void parseCommand(String[] line, BooleanWrapper transactionQueued, ArrayList<String[]> transaction,
+      BufferedWriter outputWriter)
+      throws InterruptedException, IOException {
     String command = line[0];
     if (transactionQueued.value) {
       if (command.equalsIgnoreCase("EXEC")) {
         transactionQueued.value = false;
-        String[] commandReturns = new String[transaction.size()];
+        outputWriter.write("*" + transaction.size() + "\r\n");
         for (int i = 0; i < transaction.size(); i++) {
-          commandReturns[i] = parseCommand(transaction.get(i), new BooleanWrapper(false), null);
+          parseCommand(transaction.get(i), new BooleanWrapper(false), null, outputWriter);
         }
-        String returnString = "*" + commandReturns.length + "\r\n";
-        for (int i = 0; i < commandReturns.length; i++) {
-          returnString += commandReturns[i];
-        }
-        return returnString;
       } else if (command.equalsIgnoreCase("DISCARD")) {
         transaction.clear();
         transactionQueued.value = false;
-        return "+OK\r\n";
+        outputWriter.write("+OK\r\n");
       } else {
         transaction.add(line);
-        return simpleString("QUEUED");
+        outputWriter.write(simpleString("QUEUED"));
       }
+      outputWriter.flush();
+      return;
     } else {
       switch (command.toUpperCase()) {
         case "PING": {
-          return "+PONG\r\n";
+          outputWriter.write("+PONG\r\n");
+          outputWriter.flush();
+          return;
         }
         case "ECHO": {
           String toEcho = line[1];
-          return "$" + toEcho.length() + "\r\n" + toEcho + "\r\n";
+          outputWriter.write("$" + toEcho.length() + "\r\n" + toEcho + "\r\n");
+          outputWriter.flush();
+          return;
         }
         case "SET": {
           String key = line[1];
@@ -119,27 +120,33 @@ public class Main {
               storeWithExpiry(key, new StoredString(value), expiry);
             }
           }
-          return "+OK\r\n";
+          outputWriter.write("+OK\r\n");
+          outputWriter.flush();
+          return;
         }
         case "GET": {
           String key = line[1];
           StoredValue value = storedData.get(key);
           if (value == null) {
-            return "$-1\r\n";
+            outputWriter.write("$-1\r\n");
           } else if (value instanceof StoredString) {
-            return ((StoredString) value).getOutput();
+            outputWriter.write(((StoredString) value).getOutput());
           } else {
-            return "$-1\r\n";
+            outputWriter.write("$-1\r\n");
           }
+          outputWriter.flush();
+          return;
         }
         case "TYPE": {
           String key = line[1];
           StoredValue value = storedData.get(key);
           if (value == null) {
-            return "+none\r\n";
+            outputWriter.write("+none\r\n");
           } else {
-            return simpleString(value.type);
+            outputWriter.write(simpleString(value.type));
           }
+          outputWriter.flush();
+          return;
         }
         case "XADD": {
           String key = line[1];
@@ -157,17 +164,21 @@ public class Main {
               addedEntries.put(line[i], line[i + 1]);
             }
             String returnId = stream.addEntries(id, addedEntries);
-            return bulkString(returnId);
+            outputWriter.write(bulkString(returnId));
           } catch (RedisException e) {
-            return simpleError(e.getMessage());
+            outputWriter.write(simpleError(e.getMessage()));
           }
+          outputWriter.flush();
+          return;
         }
         case "XRANGE": {
           String key = line[1];
           StoredStream stream = (StoredStream) storedData.get(key);
           ArrayList<StreamEntry> range = stream.getRange(line[2], line[3]);
           if (range.size() == 0) {
-            return "$-1\r\n";
+            outputWriter.write("$-1\r\n");
+            outputWriter.flush();
+            return;
           }
           String returnString = "*" + range.size() + "\r\n";
           for (StreamEntry entry : range) {
@@ -179,7 +190,9 @@ public class Main {
               returnString += bulkString(entry.values.get(entryKey));
             }
           }
-          return returnString;
+          outputWriter.write(returnString);
+          outputWriter.flush();
+          return;
         }
         case "XREAD": {
           int streamsIndex = 0;
@@ -232,7 +245,9 @@ public class Main {
             }
 
             if (range.size() == 0) {
-              return "$-1\r\n";
+              outputWriter.write("$-1\r\n");
+              outputWriter.flush();
+              return;
             }
             returnString += "*" + range.size() + "\r\n";
             for (int j = 0; j < range.size(); j++) {
@@ -246,37 +261,47 @@ public class Main {
               }
             }
           }
-          return returnString;
+          outputWriter.write(returnString);
+          outputWriter.flush();
+          return;
         }
         case "INCR": {
           String key = line[1];
           StoredValue storedValue = storedData.get(key);
           if (storedValue == null) {
             storedData.put(key, new StoredString("1"));
-            return ":1\r\n";
+            outputWriter.write(":1\r\n");
           } else if (storedValue instanceof StoredString) {
             try {
               StoredString storedString = (StoredString) storedValue;
               int newVal = Integer.parseInt(storedString.value) + 1;
               storedString.value = String.valueOf(newVal);
-              return ":" + newVal + "\r\n";
+              outputWriter.write(":" + newVal + "\r\n");
             } catch (NumberFormatException e) {
-              return simpleError("ERR value is not an integer or out of range");
+              outputWriter.write(simpleError("ERR value is not an integer or out of range"));
             }
           } else {
-            return simpleError("Incremented value isn't a string");
+            outputWriter.write(simpleError("Incremented value isn't a string"));
           }
+          outputWriter.flush();
+          return;
         }
         case "MULTI": {
           transactionQueued.value = true;
           transaction.clear();
-          return "+OK\r\n";
+          outputWriter.write("+OK\r\n");
+          outputWriter.flush();
+          return;
         }
         case "EXEC": { // Won't ever be here if transactionQueued == true
-          return simpleError("ERR EXEC without MULTI");
+          outputWriter.write(simpleError("ERR EXEC without MULTI"));
+          outputWriter.flush();
+          return;
         }
         case "DISCARD": { // Won't ever be here if transactionQueued == true
-          return simpleError("ERR DISCARD without MULTI");
+          outputWriter.write(simpleError("ERR DISCARD without MULTI"));
+          outputWriter.flush();
+          return;
         }
         case "RPUSH": {
           String key = line[1];
@@ -288,7 +313,9 @@ public class Main {
             String element = line[i];
             storedList.push(element);
           }
-          return redisInteger(storedList.size());
+          outputWriter.write(redisInteger(storedList.size()));
+          outputWriter.flush();
+          return;
         }
         case "LPUSH": {
           String key = line[1];
@@ -300,7 +327,9 @@ public class Main {
             String element = line[i];
             storedList.prepush(element);
           }
-          return redisInteger(storedList.size());
+          outputWriter.write(redisInteger(storedList.size()));
+          outputWriter.flush();
+          return;
         }
         case "LRANGE": {
           String key = line[1];
@@ -309,39 +338,75 @@ public class Main {
           if (storedData.containsKey(key)) {
             StoredList storedList = (StoredList) storedData.get(key);
             ArrayList<String> subList = storedList.subList(firstIndex, secondIndex);
-            return bulkStringArray(subList);
+            outputWriter.write(bulkStringArray(subList));
           } else {
-            return "*0\r\n";
+            outputWriter.write("*0\r\n");
           }
+          outputWriter.flush();
+          return;
         }
         case "LLEN": {
           String key = line[1];
           if (storedData.containsKey(key)) {
             StoredList storedList = (StoredList) storedData.get(key);
-            return redisInteger(storedList.size());
+            outputWriter.write(redisInteger(storedList.size()));
           } else {
-            return ":0\r\n";
+            outputWriter.write(":0\r\n");
           }
+          outputWriter.flush();
+          return;
         }
         case "LPOP": {
           String key = line[1];
           if (storedData.containsKey(key)) {
             StoredList storedList = (StoredList) storedData.get(key);
             if (storedList.size() == 0) {
-              return "$-1\r\n";
+              outputWriter.write("$-1\r\n");
+              outputWriter.flush();
+              return;
             }
-            if(line.length == 2) {
-              return bulkString(storedList.popFirst());
+            if (line.length == 2) {
+              outputWriter.write(bulkString(storedList.popFirst()));
             } else {
               int count = Integer.parseInt(line[2]);
-              return bulkStringArray(storedList.popFirst(count));
+              outputWriter.write(bulkStringArray(storedList.popFirst(count)));
             }
           } else {
-            return "$-1\r\n";
+            outputWriter.write("$-1\r\n");
+          }
+          outputWriter.flush();
+          return;
+        }
+        case "BLPOP": {
+          long blockTime = Long.parseLong(line[line.length - 1]);
+          if (blockTime == 0) {
+            // BLOCK 0: wait indefinitely for data
+            ArrayList<String> waiting = new ArrayList<String>(
+                Arrays.asList(Arrays.copyOfRange(line, 1, line.length - 1)));
+            while (waiting.size() > 0) {
+              ArrayList<String> toRemove = new ArrayList<>();
+              for (String listKey : waiting) {
+                if (storedData.containsKey(listKey)) {
+                  StoredList storedList = (StoredList) storedData.get(listKey);
+                  if(storedList.size() > 0) {
+                    System.out.println(listKey);
+                    outputWriter.write(bulkStringArray(listKey, storedList.popFirst()));
+                    outputWriter.flush();
+                    toRemove.add(listKey);
+                  }
+                }
+              }
+              waiting.removeAll(toRemove);
+            }
+            return;
+          } else {
+            // Thread.sleep(blockTime);
           }
         }
         default:
-          return simpleError("ERR: Command " + command.toUpperCase() + " not found");
+          outputWriter.write(simpleError("ERR: Command " + command.toUpperCase() + " not found"));
+          outputWriter.flush();
+          return;
       }
     }
   }
@@ -362,7 +427,7 @@ public class Main {
     return ":" + Integer.toString(input) + "\r\n";
   }
 
-  static String bulkStringArray(String[] input) {
+  static String bulkStringArray(String... input) {
     String returnString = "*" + input.length + "\r\n";
     for (String element : input) {
       returnString += bulkString(element);
